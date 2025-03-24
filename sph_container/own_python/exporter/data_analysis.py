@@ -10,7 +10,7 @@ base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, base_path)
 from own_python.validation_test.turbulent_flow_pipe import * 
 from own_python.exporter.Tools import *
-from own_python import *
+from plot_vtk import *
 
 
 def main():
