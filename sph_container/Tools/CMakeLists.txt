@@ -1,0 +1,15 @@
+macro(add_tool arg)
+    option(Build_${arg} "Build ${arg}"	ON)
+	if (Build_${arg})
+		add_subdirectory(${arg})
+	endif()
+endmacro()
+
+add_tool(PartioViewer)
+add_tool(FoamGenerator)
+add_tool(SurfaceSampling)
+add_tool(VolumeSampling)
+add_tool(partio2vtk)
+add_tool(MeshSkinning)
+add_tool(ParameterParser)
+

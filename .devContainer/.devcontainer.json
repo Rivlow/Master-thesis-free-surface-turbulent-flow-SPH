@@ -1,0 +1,26 @@
+{
+    "name": "SPlisHSPlasH",
+    "build": {
+        "context": "..",
+        "dockerfile": "Dockerfile"
+    },
+    "mounts": [
+        "source=${localWorkspaceFolder}/SPlisHSPlasH,target=/opt/sph_container/SPlisHSPlasH,type=bind"
+    ],
+    "workspaceFolder": "/opt/sph_container",
+    "remoteUser": "root",
+    "runArgs": ["--gpus", "all"],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-python.python",
+                "ms-vscode.cmake-tools"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    "postCreateCommand": "chmod +x /entrypoint.sh && /entrypoint.sh echo 'Environment initialized'"
+}
