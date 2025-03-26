@@ -6,7 +6,7 @@ import numpy as np
 # Configure project path
 base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, base_path)
-from python.write_scenes.Tools_scenes import * 
+from own_python.write_scenes.Tools_scenes import * 
 
 #-----------------------#
 # SIMULATION PARAMETERS #

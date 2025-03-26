@@ -1,13 +1,14 @@
 {
     "Configuration": {
+        "particleAttributes": "velocity;angular velocity;pressure;density;velocity difference",
         "timeStepSize": 0.001,
         "sim2D": true,
-        "stopAt": 20,
+        "stopAt": 30,
         "numberOfStepsPerRenderUpdate": 4,
         "enableVTKExport": true,
         "enableRigidBodyVTKExport": true,
-        "dataExportFPS": 50,
-        "particleRadius": 0.01,
+        "dataExportFPS": 20,
+        "particleRadius": 0.02,
         "density0": 1000,
         "simulationMethod": 4,
         "gravitation": [
@@ -19,10 +20,10 @@
         "cflFactor": 0.6,
         "cflMaxTimeStepSize": 0.01,
         "maxIterations": 1000,
-        "maxError": 0.05,
+        "maxError": 0.01,
         "maxIterationsV": 100,
-        "maxErrorV": 0.1,
-        "stiffness": 50000,
+        "maxErrorV": 0.05,
+        "stiffness": 100000,
         "exponent": 7,
         "velocityUpdateMethod": 0,
         "enableDivergenceSolver": true,
@@ -32,10 +33,10 @@
         {
             "id": "Fluid",
             "viscosityMethod": 6,
-            "viscosity": 1e-06,
+            "viscosity": 5e-05,
             "xsphBoundary": 0.7,
             "xsph": 0.2,
-            "viscosityBoundary": 0.5,
+            "viscosityBoundary": 1.0,
             "dragMethod": 2,
             "drag": 1.0,
             "vorticityMethod": 1,
@@ -46,23 +47,23 @@
             "maxEmitterParticles": 10000000,
             "emitterReuseParticles": true,
             "emitterBoxMin": [
-                -2.453263271353478,
-                -2.0999999999999996,
-                -0.55
+                -2.653888872507739,
+                -2.15,
+                -0.6
             ],
             "emitterBoxMax": [
-                19.701334588534273,
-                2.0999999999999996,
-                0.55
+                28.970154261712043,
+                2.15,
+                0.6
             ]
         }
     ],
     "Emitters": [
         {
-            "width": 25,
-            "height": 200,
+            "width": 12,
+            "height": 100,
             "translation": [
-                -2.1532632713534783,
+                -2.303888872507739,
                 0,
                 0
             ],
@@ -74,20 +75,20 @@
             "rotationAngle": 0,
             "velocity": 5,
             "type": 0,
-            "emitEndTime": 20
+            "emitEndTime": 30
         }
     ],
     "FluidBlocks": [
         {
             "denseMode": 0,
             "start": [
-                0.8388786277053452,
-                -1.4664535528701867,
+                0.6935249374677829,
+                -1.615398443723094,
                 -0.5
             ],
             "end": [
-                20.685615356351867,
-                1.4664535528701867,
+                30.389636064960044,
+                1.615398443723094,
                 0.5
             ],
             "scale": [
@@ -126,9 +127,9 @@
                 0,
                 1
             ],
-            "rotationAngle": 0.3490658503988659,
+            "rotationAngle": 0.2617993877991494,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -152,8 +153,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.7118697161067589,
-                -1.9014133759567304,
+                -1.4116025928433036,
+                -1.8628049669113205,
                 0
             ],
             "rotationAxis": [
@@ -161,9 +162,9 @@
                 0,
                 1
             ],
-            "rotationAngle": 0.310280755910103,
+            "rotationAngle": 0.19634954084936207,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -187,8 +188,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.4201333869237411,
-                -1.8140732524654812,
+                -0.8154920052227038,
+                -1.7643867105787165,
                 0
             ],
             "rotationAxis": [
@@ -196,9 +197,9 @@
                 0,
                 1
             ],
-            "rotationAngle": 0.27149566142134013,
+            "rotationAngle": 0.1308996938995747,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -222,8 +223,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.1252298116025212,
-                -1.7381109973685565,
+                -0.2142208741909543,
+                -1.7051666730852502,
                 0
             ],
             "rotationAxis": [
@@ -231,9 +232,9 @@
                 0,
                 1
             ],
-            "rotationAngle": 0.23271056693257727,
+            "rotationAngle": 0.06544984694978734,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -257,183 +258,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -0.8276025531337271,
-                -1.6736408651133932,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": 0.1939254724438144,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                -0.5276992711861671,
-                -1.6207598249030206,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": 0.1551403779550515,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                -0.22597104878416516,
-                -1.579547414845166,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": 0.11635528346628865,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.07712828616415768,
-                -1.5500656223193872,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": 0.07757018897752577,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.38114284346716665,
-                -1.5323587907421636,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": 0.03878509448876288,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.6856153563518671,
-                -1.5264535528701868,
+                0.38963606496004366,
+                -1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -443,7 +269,7 @@
             ],
             "rotationAngle": 0.0,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -476,9 +302,9 @@
                 0,
                 1
             ],
-            "rotationAngle": -0.3490658503988659,
+            "rotationAngle": -0.2617993877991494,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -502,8 +328,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.7118697161067589,
-                1.9014133759567304,
+                -1.4116025928433036,
+                1.8628049669113205,
                 0
             ],
             "rotationAxis": [
@@ -511,9 +337,9 @@
                 0,
                 1
             ],
-            "rotationAngle": -0.310280755910103,
+            "rotationAngle": -0.19634954084936207,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -537,8 +363,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.4201333869237411,
-                1.8140732524654812,
+                -0.8154920052227038,
+                1.7643867105787165,
                 0
             ],
             "rotationAxis": [
@@ -546,9 +372,9 @@
                 0,
                 1
             ],
-            "rotationAngle": -0.27149566142134013,
+            "rotationAngle": -0.1308996938995747,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -572,8 +398,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -1.1252298116025212,
-                1.7381109973685565,
+                -0.2142208741909543,
+                1.7051666730852502,
                 0
             ],
             "rotationAxis": [
@@ -581,9 +407,9 @@
                 0,
                 1
             ],
-            "rotationAngle": -0.23271056693257727,
+            "rotationAngle": -0.06544984694978734,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -607,183 +433,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                -0.8276025531337271,
-                1.6736408651133932,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": -0.1939254724438144,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                -0.5276992711861671,
-                1.6207598249030206,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": -0.1551403779550515,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                -0.22597104878416516,
-                1.579547414845166,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": -0.11635528346628865,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.07712828616415768,
-                1.5500656223193872,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": -0.07757018897752577,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.38114284346716665,
-                1.5323587907421636,
-                0
-            ],
-            "rotationAxis": [
-                0,
-                0,
-                1
-            ],
-            "rotationAngle": -0.03878509448876288,
-            "scale": [
-                0.3065265427069561,
-                0.1,
-                1.0
-            ]
-        },
-        {
-            "geometryFile": "../models/UnitBox.obj",
-            "color": [
-                0.1,
-                0.4,
-                0.6,
-                1.0
-            ],
-            "isDynamic": false,
-            "isWall": false,
-            "mapInvert": false,
-            "mapThickness": 0.0,
-            "mapResolution": [
-                60,
-                10,
-                10
-            ],
-            "samplingMode": 1,
-            "translation": [
-                0.6856153563518671,
-                1.5264535528701868,
+                0.38963606496004366,
+                1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -793,7 +444,7 @@
             ],
             "rotationAngle": 0.0,
             "scale": [
-                0.3065265427069561,
+                0.6077777450154784,
                 0.1,
                 1.0
             ]
@@ -817,8 +468,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                5.685615356351867,
-                -1.5264535528701868,
+                7.889636064960044,
+                -1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -828,7 +479,7 @@
             ],
             "rotationAngle": 0,
             "scale": [
-                10.0,
+                15.0,
                 0.1,
                 1.0
             ]
@@ -852,8 +503,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                15.685615356351867,
-                -1.5264535528701868,
+                22.889636064960044,
+                -1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -863,7 +514,7 @@
             ],
             "rotationAngle": 0,
             "scale": [
-                10.0,
+                15.0,
                 0.1,
                 1.0
             ]
@@ -887,8 +538,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                5.685615356351867,
-                1.5264535528701868,
+                7.889636064960044,
+                1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -898,7 +549,7 @@
             ],
             "rotationAngle": 0,
             "scale": [
-                10.0,
+                15.0,
                 0.1,
                 1.0
             ]
@@ -922,8 +573,8 @@
             ],
             "samplingMode": 1,
             "translation": [
-                15.685615356351867,
-                1.5264535528701868,
+                22.889636064960044,
+                1.685398443723094,
                 0
             ],
             "rotationAxis": [
@@ -933,7 +584,7 @@
             ],
             "rotationAngle": 0,
             "scale": [
-                10.0,
+                15.0,
                 0.1,
                 1.0
             ]

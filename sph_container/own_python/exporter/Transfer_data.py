@@ -38,11 +38,10 @@ def copy_from_container(container_id, container_path, local_path):
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
 
-# Utilisation
 if __name__ == "__main__":
 
     container_id = '6f08d4bc7201923b19e92b8f5d31c84093447dcb0fbe6195eb4bf4ce6102d823'
     container_path = "/opt/sph_container/Code/bin/output/channel_curve_2D/vtk"
-    local_path = "output_host/channel_curve_2D/DFSPH/5_m_s/angle_35"
+    local_path = "output_host/channel_curve_2D/DFSPH/5_m_s/angle_15"
     
     copy_from_container(container_id, container_path, local_path)

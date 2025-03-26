@@ -43,6 +43,7 @@ RUN update-alternatives --install /usr/bin/python python ${PYTHON_EXECUTABLE} 1 
     python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir wheel==0.38.4 pybind11==2.10.4 pipx==1.2.0 && \
     python3 -m pip install --no-cache-dir scipy==1.10.1 matplotlib==3.7.1 && \
+    python3 -m pip install pyvista==0.32.0 vtk==9.0.3 && \
     python3 -m pipx ensurepath
 
 # Configuration des variables d'environnement

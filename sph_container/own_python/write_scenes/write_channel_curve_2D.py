@@ -6,16 +6,16 @@ import numpy as np
 # Configure project path
 base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, base_path)
-from python.write_scenes.Tools_scenes import * 
+from own_python.write_scenes.Tools_scenes import * 
 
 #-----------------------#
 # SIMULATION PARAMETERS #
 #-----------------------#
 
 # General parameters
-r = 0.01
+r = 0.02
 U_0 = 5
-t_end = 20
+t_end = 30
 timeStepSize = 0.001
 xsph_fluid = 0.2
 xsph_boundary = 0.7
@@ -27,7 +27,8 @@ rho_0 = 1000
 # Sim parameters
 sim2D = True
 mapInvert = False # False: domain is outside unitbox (inside if True)
-FPS = 50
+FPS = 20
+clean_output = True
 
 #------- Pressure solver -------#
 '''
@@ -51,7 +52,7 @@ simulationMethod = 4
 6: Weiler et al. 2018
 '''
 viscosityMethod = 6                 
-nu = 1e-6
+nu = 0.5*1e-4
 
 #-------- Vorticity -----------#
 '''
@@ -97,14 +98,14 @@ drag = 1.0
 Ly = 0.1                   
 Lz = 1.0                   
 Lx_narrowing = 3.0          
-Lx_horiz = 10.0          
+Lx_horiz = 15.0          
 
 x_start = -2.0         # initial x position of channel entry     
 Ly_init = 2            # half distance between right narrow elem 
 
 # Angle configuration
-alpha_tot = np.radians(20)    
-nb_narrow = 10                # nb elements for narrow section
+alpha_tot = np.radians(15)    
+nb_narrow = 5               # nb elements for narrow section
 nb_horiz = 2                  # nb elements for horiz section
 
 Lx = calculate_lx_for_total_length(Lx_narrowing, nb_narrow, alpha_tot)
@@ -197,6 +198,7 @@ fluid_y2 = top_straight[0]["translation"][1] - Ly/2 - r
 
 data = {
     "Configuration": {
+        "particleAttributes": "velocity;angular velocity;pressure;density;velocity difference",
         "timeStepSize": timeStepSize,
         "sim2D": sim2D,
         "stopAt": t_end,
@@ -212,10 +214,10 @@ data = {
         "cflFactor": 0.6,
         "cflMaxTimeStepSize": 0.01,
         "maxIterations": 1000,
-        "maxError": 0.05,
+        "maxError": 0.01,
         "maxIterationsV": 100,
-        "maxErrorV": 0.1,
-        "stiffness": 50000,
+        "maxErrorV": 0.05,
+        "stiffness": 100000,
         "exponent": 7,
         "velocityUpdateMethod": 0,
         "enableDivergenceSolver": True,
@@ -229,7 +231,7 @@ data = {
             "viscosity": nu,
             "xsphBoundary": xsph_boundary, 
             "xsph": xsph_fluid,   
-            "viscosityBoundary": 0.5,
+            "viscosityBoundary": 1.0,
             "dragMethod": dragMethod,
             "drag": drag,
             "vorticityMethod": vorticityMethod,
@@ -294,7 +296,8 @@ json_path = "Code/data/Scenes/channel_curve_2D.json"
 output_path = "Code/bin/output/channel_curve_2D"
 
 # Clean output directory
-#clean_files(output_path)
+if clean_output:clean_files(output_path)
+
 
 # Ensure directory exists
 os.makedirs(os.path.dirname(json_path), exist_ok=True)
