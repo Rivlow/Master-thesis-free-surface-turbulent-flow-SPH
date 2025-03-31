@@ -304,17 +304,7 @@ def create_horiz_channel(Lx, Ly, Lz, diameter, x_start, y_start):
 #---------------------------------#
 
 def calculate_scene_bounds(rigid_bodies, margin=0.1):
-    """
-    Calculate the minimum and maximum coordinates across all rigid bodies
-    to define a bounding box for particle reuse.
     
-    Args:
-        rigid_bodies: List of rigid body dictionaries
-        margin: Additional margin to add to the bounds (default: 0.1)
-        
-    Returns:
-        tuple: (min_coords, max_coords) as [x,y,z] vectors
-    """
     # Initialize with extreme values
     min_x, min_y, min_z = float('inf'), float('inf'), float('inf')
     max_x, max_y, max_z = float('-inf'), float('-inf'), float('-inf')

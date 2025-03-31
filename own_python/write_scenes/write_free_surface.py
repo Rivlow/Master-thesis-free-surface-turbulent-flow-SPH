@@ -15,7 +15,7 @@ from own_python.write_scenes.Tools_scenes import *
 #-----------------------------#
 
 # 2.1 General parameters
-r = 0.01                   # Particle radius
+r = 0.005                 # Particle radius
 U_0 = 2                     # Initial velocity
 t_end = 15                  # Simulation end time
 timeStepSize = 0.001        # Time step size
@@ -32,8 +32,8 @@ attr = "velocity;angular velocity;p / rho^2;density"  # Exported attributes
 
 # 2.4 SPH parameters
 xsph_fluid = 0.2            # XSPH for fluid
-xsph_boundary = 0.7         # XSPH for boundaries
-viscosity_boundary = 2      # Boundary viscosity
+xsph_boundary = 0.         # XSPH for boundaries
+viscosity_boundary = 0.0     # Boundary viscosity
 
 
 #-------------------------------#
@@ -150,6 +150,7 @@ width_of_weir = 5 * (2*r)*10
 fluid_x12, fluid_y12 = Lx_1 + 2*np.sqrt(Radius**2 - (H/2)**2), 0
 fluid_x22, fluid_y22 = rightmost_x - 30*(2*r), 1.2*(Radius - H)
 
+'''
 # 5.4 Add weir to rigid bodies
 RigidBodies.append({
     "geometryFile": "../models/UnitBox.obj",
@@ -164,7 +165,10 @@ RigidBodies.append({
     "mapThickness": 0.0,
     "mapResolution": [20, 20, 20],
     "samplingMode": 1
-})
+})'
+'''
+
+
 
 
 #-------------------------------#
@@ -196,7 +200,7 @@ emitter_config = {
 final_box_min, final_box_max = calculate_scene_bounds(RigidBodies, margin=10*r)
 
 # Add some padding to the bounds (extra 20% in each direction)
-padding = [(final_box_max[i] - final_box_min[i]) * 0.2 for i in range(3)]
+padding = [(final_box_max[i] - final_box_min[i]) * 0.8 for i in range(3)]
 emitter_box_min = [final_box_min[i] - padding[i] for i in range(3)]
 emitter_box_max = [final_box_max[i] + padding[i] for i in range(3)]
 
@@ -258,7 +262,7 @@ data = {
             "viscosityOmega": viscosityOmega,
             "inertiaInverse": inertiaInverse,
             "colorMapType": 1,
-            "maxEmitterParticles": 10000000,
+            "maxEmitterParticles": 100000,
             "emitterReuseParticles": True,
             "emitterBoxMin": emitter_box_min,
             "emitterBoxMax": emitter_box_max
@@ -291,7 +295,32 @@ data = {
         }
     ],
     
-    "RigidBodies": RigidBodies
+    "RigidBodies": RigidBodies,
+
+    "AnimationFields": [
+    {
+        "particleField": "velocity",
+        "translation": [rightmost_x, 0.165, 0],
+        "rotationAxis": [0, 0, 1],
+        "rotationAngle": 0.0,
+        "scale": [width_of_weir, 2*emit_L, Lz],
+        "shapeType": 0,
+        "expression_x": f"{U_0}",
+        "expression_y": "",
+        "expression_z": ""
+    },
+    {
+        "particleField": "position",
+        "translation": [rightmost_x, 0.165, 0],
+        "rotationAxis": [0, 0, 1],
+        "rotationAngle": 0.0,
+        "scale": [width_of_weir, 2*emit_L, Lz],
+        "shapeType": 0,
+        "expression_x": "",
+        "expression_y": f"{2*emit_L}",
+        "expression_z": ""
+    },
+    ]
 }
 
 
@@ -300,8 +329,8 @@ data = {
 #-------------------------------#
 
 # 9.1 Define output paths
-json_path = "Code/data/Scenes/free_surface_2D.json"
-output_path = "Code/bin/output/free_surface_2D"
+json_path = "SPlisHSPlasH/data/Scenes/free_surface_2D.json"
+output_path = "SPlisHSPlasH/bin/output/free_surface_2D"
 
 # 9.2 Clean output directory
 if clean_output:
