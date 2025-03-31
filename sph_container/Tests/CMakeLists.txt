@@ -1,5 +1,0 @@
-add_subdirectory(Kernel)
-add_subdirectory(ReadWriteState)
-if (FOUND_AVX2)
-	add_subdirectory(AVX)
-endif()
