@@ -9,37 +9,12 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 #   General functional function   #
 #---------------------------------#
 
-def clean_files(path):
-   
-    try:
-       
-        if not os.path.exists(path):
-            print(f"Path '{path}' does not exist.")
-            return False
-            
-        if not os.path.isdir(path):
-            print(f"'{path}' is not a folder.")
-            return False
-            
-      
-        for item in os.listdir(path):
-            item_path = os.path.join(path, item)
-            
-          
-            if os.path.isfile(item_path) or os.path.islink(item_path):
-               
-                os.unlink(item_path)
-            elif os.path.isdir(item_path):
+def clean_files(directory):
+    import shutil
+    if os.path.exists(directory):
+        shutil.rmtree(directory)
+    os.makedirs(directory, exist_ok=True)
 
-                shutil.rmtree(item_path)
-                
-        print(f"Cleaning folder '{path}' successfully.")
-        return True
-        
-    except Exception as e:
-        print(f"Error while cleaning folder: {str(e)}")
-        return False
-    
 
 #----------------------#
 #   UTILITY FUNCTIONS  #
@@ -303,42 +278,46 @@ def create_horiz_channel(Lx, Ly, Lz, diameter, x_start, y_start):
 #    Functions: Free surface 0    #
 #---------------------------------#
 
-def calculate_scene_bounds(rigid_bodies, margin=0.1):
-    
-    # Initialize with extreme values
+# Parabola function
+def parabole(x):
+    z = np.zeros_like(x)
+    for i in range(len(x)):
+        if x[i] < 8:
+            z[i] = 0
+        elif x[i] > 12:
+            z[i] = 0
+        else:
+            z[i] = 0.2 - 0.05*(x[i]-10)**2
+    return z
+
+# Function to calculate scene bounds
+def calculate_scene_bounds(rigid_bodies, margin=0.01):
     min_x, min_y, min_z = float('inf'), float('inf'), float('inf')
     max_x, max_y, max_z = float('-inf'), float('-inf'), float('-inf')
     
     for body in rigid_bodies:
-        trans = body["translation"]
-        geometry_type = body["geometryFile"].split('/')[-1]
+        translation = body.get("translation", [0, 0, 0])
+        scale = body.get("scale", [1, 1, 1])
         
-        if "UnitBox" in geometry_type:
-            # Box extents
-            half_scale = [s/2 for s in body["scale"]]
-            body_min = [trans[0] - half_scale[0], trans[1] - half_scale[1], trans[2] - half_scale[2]]
-            body_max = [trans[0] + half_scale[0], trans[1] + half_scale[1], trans[2] + half_scale[2]]
+        # Calculate corners of the body's bounding box
+        half_scale = [s/2 for s in scale]
+        min_corner = [translation[i] - half_scale[i] for i in range(3)]
+        max_corner = [translation[i] + half_scale[i] for i in range(3)]
         
-        elif "sphere" in geometry_type:
-            # Sphere extents (assuming uniform scaling)
-            radius = body["scale"][0]
-            body_min = [trans[0] - radius, trans[1] - radius, trans[2] - radius]
-            body_max = [trans[0] + radius, trans[1] + radius, trans[2] + radius]
-        
-        else:
-            # Unknown geometry - skip
-            continue
-        
-        # Update global min/max
-        min_x = min(min_x, body_min[0])
-        min_y = min(min_y, body_min[1])
-        min_z = min(min_z, body_min[2])
-        max_x = max(max_x, body_max[0])
-        max_y = max(max_y, body_max[1])
-        max_z = max(max_z, body_max[2])
+        # Update overall bounds
+        min_x = min(min_x, min_corner[0])
+        min_y = min(min_y, min_corner[1])
+        min_z = min(min_z, min_corner[2])
+        max_x = max(max_x, max_corner[0])
+        max_y = max(max_y, max_corner[1])
+        max_z = max(max_z, max_corner[2])
     
     # Add margin
-    min_coords = [min_x - margin, min_y - margin, min_z - margin]
-    max_coords = [max_x + margin, max_y + margin, max_z + margin]
+    min_x -= margin
+    min_y -= margin
+    min_z -= margin
+    max_x += margin
+    max_y += margin
+    max_z += margin
     
-    return min_coords, max_coords
+    return [min_x, min_y, min_z], [max_x, max_y, max_z]
