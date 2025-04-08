@@ -13,28 +13,29 @@ def main():
     #    SIMULATION PARAMETERS    #
     #-----------------------------#
     
-    r = 0.005                   # Particle radius
-    U_0 = 2                     # Initial velocity
-    t_end = 15                  # Simulation end time
+    r = 0.005*np.sqrt(2)             # Particle radius
+    U_0 = 0.36                     # Initial velocity
+    t_end = 300                 # Simulation end time
     timeStepSize = 0.001        # Time step size
     FPS = 40                    # Frames per second for export
     clean_output = True         # Clean output directory
+    g = 9.81
     
     rho_0 = 1000                # Reference density
     
     sim2D = True                # 2D simulation
     mapInvert = False           # Domain is outside the unit box
-    attr = "velocity;angular velocity;p / rho^2;density"  # Exported attributes
+    attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density"  # Exported attributes
     
-    xsph_fluid = 0.2            # XSPH for fluid
-    xsph_boundary = 0.0         # XSPH for boundaries
-    viscosity_boundary = 0.0    # Boundary viscosity
+    xsph_fluid = 0.15           # XSPH for fluid
+    xsph_boundary = 0.5         # XSPH for boundaries
+    viscosity_boundary = 0.2    # Boundary viscosity
     
     simulationMethod = 4        # DFSPH
     viscosityMethod = 6         # Weiler et al. 2018
     nu = 1e-6                   # Kinematic viscosity
-    vorticityMethod = 1         # Micropolar model
-    vorticity = 0.25            # Vorticity coefficient
+    vorticityMethod = 1        # Micropolar model
+    vorticity = 0.15            # Vorticity coefficient
     viscosityOmega = 0.1        # Angular viscosity
     inertiaInverse = 0.5        # Inverse inertia
     boundaryHandlingMethod = 2  # Volume maps
@@ -46,15 +47,24 @@ def main():
     #     GEOMETRIC CONFIGURATION   #
     #-------------------------------#
     
-    Ly = 0.1                    # Half-height of walls
-    Lz = 1.0                    # Depth
-    Lx_1 = 3.0                  # Length of first rectangle
-    Lx_2 = 3.0                  # Length of second rectangle
+    # Horizontal blocs
+    Ly = 0.1                   
+    Lz = 1.0                   
+    Lx_1 = 1.5                
+    Lx_2 = 3               
+
+    # Parabola obstacle
+    nb_elem = 20               
+    parabola_start = Lx_1       
+    parabola_end = Lx_1 + 4      
+
+    # Second obstacle 
+    Lx_obstacle = 0.02
+    Ly_obstacle = 0.12
+    Lz_obstacle = 0.8
+    dist_x_obstacle = 1.5
     
-    nb_elem = 60                # Number of segments for parabola (increased for better precision)
-    parabola_start = 3.0        # Start position of parabola (matching Lx_1)
-    parabola_end = 4.0          # End position of parabola
-    
+
     trans_first_rect = [Lx_1/2, -Ly/2, 0]                                          
     trans_second_rect = [parabola_end + Lx_2/2, -Ly/2, 0]
     
@@ -92,7 +102,7 @@ def main():
     ]
     
     x = np.linspace(parabola_start, parabola_end, nb_elem+1)
-    z = parabole(np.linspace(7, 13, nb_elem+1)) 
+    z = parabole(np.linspace(8, 12, nb_elem+1)) 
     
     segments = []
     
@@ -137,12 +147,13 @@ def main():
         })
     
     # Left connection piece
+    dx = 1
     RigidBodies.append({
         "geometryFile": "../models/UnitBox.obj",
-        "translation": [parabola_start - 0.01, z[0]/2 - Ly/2, 0],
+        "translation": [parabola_start - dx, z[0]/2 - Ly/2, 0],
         "rotationAxis": [0, 0, 1],
         "rotationAngle": 0,
-        "scale": [0.02, z[0] + Ly, Lz],
+        "scale": [2*dx, z[0] + Ly, Lz],
         "color": [0.1, 0.4, 0.6, 1.0],
         "isDynamic": False,
         "isWall": False,
@@ -167,6 +178,24 @@ def main():
         "mapResolution": [10, 20, 20],
         "samplingMode": 1
     })
+
+    trans_obstacle = [parabola_end + Lx_obstacle/2 + dist_x_obstacle, z[-1]/2 + Ly_obstacle/2 , 0]
+    
+    # Add obstacle at the end
+    RigidBodies.append({
+        "geometryFile": "../models/UnitBox.obj",
+        "translation": trans_obstacle,
+        "rotationAxis": [0, 0, 1],
+        "rotationAngle": 0,
+        "scale": [Lx_obstacle, Ly_obstacle, Lz_obstacle],
+        "color": [0.1, 0.4, 0.6, 1.0],
+        "isDynamic": False,
+        "isWall": False,
+        "mapInvert": mapInvert,
+        "mapThickness": 0.0,
+        "mapResolution": [10, 20, 20],
+        "samplingMode": 1
+    })
     
     #---------------------------#
     #    FLUID CONFIGURATION    #
@@ -177,7 +206,7 @@ def main():
     
     box_min, box_max = calculate_scene_bounds(RigidBodies, margin=5*r)
     
-    emit_H = 0.41                # Emitter height
+    emit_H = 0.5                # Emitter height
     emit_L = (2*r)*2             # Emitter width
     
     emitter_config = {
@@ -185,7 +214,7 @@ def main():
         "physical_height": emit_H,          
         "width": int(emit_L / (2 * r)),      
         "height": int(emit_H / (2 * r)),   
-        "translation": [0.5, emit_H/2 + 4*r, 0],           
+        "translation": [0, emit_H/2 + 4*r, 0],           
         "velocity": U_0,                           
         "type": 0,                                   
         "end_time": 4                               
@@ -197,6 +226,15 @@ def main():
     padding = [(final_box_max[i] - final_box_min[i]) * 1 for i in range(3)]
     emitter_box_min = [final_box_min[i] - padding[i] for i in range(3)]
     emitter_box_max = [final_box_max[i] + padding[i] for i in range(3)]
+
+    box_min = np.array(emitter_box_min)
+    box_max = np.array(emitter_box_max)
+
+    center_box = list((box_max + box_min)/2)
+    size_box = list(np.abs(box_max - box_min))
+
+    #trans_anim = [parabola_end + 0.01 + Lx_obstacle/2 + 3*(2*r), z[-1]/2 + 4*Ly/2, 0]
+    trans_anim = [parabola_end + 0.01 + Lx_obstacle/2 + 3*(2*r), z[-1]/2 + 4*Ly/2, 0]
     
     data = {
         "Configuration": {
@@ -260,18 +298,41 @@ def main():
         ],
         
         "RigidBodies": RigidBodies,   
+
+
     }
 
-    '''"FluidBlocks": [
+
+    '''        "AnimationFields": [
+
             {
-                "denseMode": 0,
-                "start": [fluid_x11, fluid_y11, -0.5],
-                "end": [fluid_x21, fluid_y21, 0.5],
-                "scale": [1, 1, 1]
+                "particleField": "p / rho^2",
+                "translation": center_box,
+                "rotationAxis": [0, 0, 1],
+                "rotationAngle": 0.0,
+                "scale": size_box,
+                "shapeType": 0,
+                "expression_x": "",
+                "expression_y": f"{g}*y/1000",
+                "expression_z": ""
             }
-        ],'''
+
+            
+]'''
+
+    ''' {
+                "particleField": "velocity",
+                "translation": center_box,
+                "rotationAxis": [0, 0, 1],
+                "rotationAngle": 0.0,
+                "scale": size_box,
+                "shapeType": 0,
+                "expression_x": f"{U_0}",
+                "expression_y": "",
+                "expression_z": ""
+            },'''
     
-    # 3.7 Write JSON file
+    # Write JSON file
     json_path = "SPlisHSPlasH/data/Scenes/free_surface_2D.json"
     output_path = "SPlisHSPlasH/bin/output/free_surface_2D"
     

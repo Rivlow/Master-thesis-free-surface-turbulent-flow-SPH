@@ -12,7 +12,7 @@ from own_python.write_scenes.Tools_scenes import *
 #--------------------------#
 r = 0.02                  # Particle radius
 U_0 = 5                   # Initial velocity
-t_end = 30                # End time
+t_end = 20                # End time
 timeStepSize = 0.001      # Time step
 FPS = 25                  # Export FPS
 clean_output = True       # Clean output folder
@@ -142,19 +142,19 @@ data = {
         "particleRadius": r,
         "density0": rho_0,
         "simulationMethod": simulationMethod,
+        "velocityUpdateMethod": 1,
         "gravitation": [0, 0, 0],
         "cflMethod": 2,
-        "cflFactor": 0.6,
-        "cflMaxTimeStepSize": 0.01,
+        "cflFactor": 0.4,
+        "cflMaxTimeStepSize": 0.005,
         "maxIterations": 2000,
-        "maxError": 0.005,
-        "maxIterationsV": 500,
-        "maxErrorV": 0.01,
-        "stiffness": 100000,
-        "exponent": 7,
-        "velocityUpdateMethod": 0,
+        "maxError": 0.001,
+        "maxIterationsV": 2000,
+        "maxErrorV": 0.001,
         "enableDivergenceSolver": True,
-        "boundaryHandlingMethod": boundaryHandlingMethod
+        "boundaryHandlingMethod": boundaryHandlingMethod,
+        "viscoMaxIter":1000,
+        "viscoMaxError":0.0001
     },
 
     "Materials": [

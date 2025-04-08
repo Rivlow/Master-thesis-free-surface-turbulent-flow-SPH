@@ -5,140 +5,86 @@ from mpl_toolkits.mplot3d import Axes3D
 import os
 import sys
 from scipy.optimize import minimize
-
-
-sys.path.append("c:\\Users\\lucas\\Unif\\TFE\\Code")
-from sph_container.own_python.exporter.Tools import *
-from sph_container.own_python.exporter.plot_vtk import *
-
-import vtk
-import numpy as np
 from shapely.geometry import Point, LineString, box
 import matplotlib.pyplot as plt
 from shapely.ops import nearest_points
 from scipy.integrate import simpson
+from scipy.optimize import curve_fit
+
+sys.path.append((os.getcwd()))
+
 
 def compute_u_ghe(y_line, U_0, delta, gamma):
-    y_half = np.linspace(0, 0.5, len(y_line)//2)  # semi line y
+
+    if len(y_line) % 2 == 0:  # Si nombre pair
+        size_half = len(y_line) // 2
+    else:  # Si nombre impair
+        size_half = (len(y_line) + 1) // 2
+
+
+    y_half = np.linspace(0, 0.5, size_half)
     
     U_L = U_0 * 4 * y_half * (1 - y_half)  # laminar
-    U_T = U_0 * (1 - np.exp(1 - np.exp(y_half / delta)))  # turublent
+    U_T = U_0 * (1 - np.exp(1 - np.exp(y_half / delta)))  # turbulent
     U_GHE_half = gamma * U_T + (1 - gamma) * U_L  # hybrid model
-    
-  
-    y_full = np.concatenate((-y_half[::-1], y_half))
-    U_full = np.concatenate((U_GHE_half, U_GHE_half[::-1])) 
-    U_L_full = np.concatenate((U_L, U_L[::-1]))
-    U_T_full = np.concatenate((U_T, U_T[::-1]))
 
-        
+    if len(y_line) % 2 == 0:
+        y_full = np.concatenate((-y_half[::-1], y_half))
+        U_full = np.concatenate((U_GHE_half, U_GHE_half[::-1]))
+        U_L_full = np.concatenate((U_L, U_L[::-1]))
+        U_T_full = np.concatenate((U_T, U_T[::-1]))
+    else:
+        y_full = np.concatenate((-y_half[::-1], y_half[1:]))
+        U_full = np.concatenate((U_GHE_half, U_GHE_half[1:][::-1]))
+        U_L_full = np.concatenate((U_L, U_L[1:][::-1]))
+        U_T_full = np.concatenate((U_T, U_T[1:][::-1]))
+    
     return U_full, U_L_full, U_T_full
 
+def u_ghe_wrapper(y_line, delta, gamma):
+    # Supposons que U_0 est connu/fixé
+    U_0 = 1.0  # À remplacer par la valeur réelle de U_0 si connue
+    u_full, _, _ = compute_u_ghe(y_line, U_0, delta, gamma)
+    return u_full
 
-def compute_velocity_slice(vtk_data, y_line, x_line, h):
+def fit_ghe_model(u_exp, y_exp, U_0=1.0):
     
-    points = vtk_data.points
-    velocities = vtk_data['velocity']
+    if U_0 is None:
+        U_0 = np.max(u_exp)
     
-    u = np.zeros((len(y_line), velocities.shape[1]))
+    def fit_func(y, delta, gamma):
+        u_model, _, _ = compute_u_ghe(y, U_0, delta, gamma)
+        return u_model
     
-    for i in range(len(y_line)):
-        y_pos = y_line[i]
-        x_pos = x_line[i]
+    # Valeurs initiales pour delta et gamma
+    initial_guess = [0.1, 0.5]  # delta=0.1, gamma=0.5
+    
+    # Bornes pour les paramètres (optionnel mais recommandé)
+    bounds = ([0.001, 0], [1.0, 1.0])  # delta ∈ [0.001, 1], gamma ∈ [0, 1]
+    
+    try:
+
+        popt, pcov = curve_fit(fit_func, y_exp, u_exp, p0=initial_guess, bounds=bounds)
+        delta_opt, gamma_opt = popt
+        perr = np.sqrt(np.diag(pcov))
         
-        dx = points[:, 0] - x_pos
-        dy = points[:, 1] - y_pos
-        dist = np.sqrt(dx**2 + dy**2)
+        u_fitted, u_laminar, u_turbulent = compute_u_ghe(y_exp, U_0, delta_opt, gamma_opt)
         
-        mask = dist <= h
+        print(f"Paramètres optimisés: delta = {delta_opt:.6f} ± {perr[0]:.6f}, gamma = {gamma_opt:.6f} ± {perr[1]:.6f}")
         
-        if np.any(mask):
+        return {
+            'delta': delta_opt,
+            'gamma': gamma_opt,
+            'error': perr,
+            'u_fitted': u_fitted,
+            'u_laminar': u_laminar,
+            'u_turbulent': u_turbulent
+        }
+    
+    except Exception as e:
+        print(f"Erreur lors de l'ajustement: {e}")
+        return None
 
-            weights = np.array([W(r, h) for r in dist[mask]])
-            total_weight = np.sum(weights)
-            
-            if total_weight > 1e-8:  # instability threshold
-                weighted_velocity = np.sum(weights[:, np.newaxis] * velocities[mask], axis=0) / total_weight
-                u[i] = weighted_velocity
-            else:
-                u[i] = np.zeros(velocities.shape[1])
-
-    return u
-
-def compute_mean_velocity_profile(vtk_data_list, 
-                                  y_line, x_line, 
-                                  h, sample_rate=1.0):
-    
-
-    # Particles are moving slowly, don't look at each timestep
-    n_files = len(vtk_data_list)
-    n_samples = max(1, int(n_files * sample_rate))
-    
-    if sample_rate < 1.0:
-        indices = np.linspace(0, n_files-1, n_samples, dtype=int)
-        sampled_vtk = [vtk_data_list[i] for i in indices]
-    else:
-        sampled_vtk = vtk_data_list
-    
-    u_all_slice = [compute_velocity_slice(vtk, y_line, x_line, h) for vtk in sampled_vtk]
-    
-    
-    return np.mean(u_all_slice, axis=0)
-
-def compute_centerline_velocity(vtk_data_list, x_start, x_end, h, U_carac, sample_rate=1.0):
-    
-    # Échantillonnage des fichiers VTK
-    n_files = len(vtk_data_list)
-    n_samples = max(1, int(n_files * sample_rate))
-    
-    if sample_rate < 1.0:
-        indices = np.linspace(0, n_files-1, n_samples, dtype=int)
-        sampled_vtk = [vtk_data_list[i] for i in indices]
-    else:
-        sampled_vtk = vtk_data_list
-    
-    # Création de la ligne centrale
-    n_points = int((x_end - x_start) / (h/4))  # Résolution appropriée
-    x_line = np.linspace(x_start, x_end, n_points)
-    y_center = 0.0  # Position centrale en y
-    
-    # Initialisation du tableau pour stocker les résultats
-    u_center_all = np.zeros((len(sampled_vtk), len(x_line)))
-    
-    # Calcul pour chaque pas de temps
-    for t, vtk in enumerate(sampled_vtk):
-        points = vtk.points
-        velocities = vtk['velocity']
-        
-        for i, x_pos in enumerate(x_line):
-            # Calcul de la distance entre les particules et le point central
-            dx = points[:, 0] - x_pos
-            dy = points[:, 1] - y_center
-            dist = np.sqrt(dx**2 + dy**2)
-            
-            # Sélection des particules dans le rayon de lissage
-            mask = dist <= h
-            
-            if np.any(mask):
-                # Calcul de la vitesse avec une moyenne pondérée (noyau SPH)
-                weights = np.array([W(r, h) for r in dist[mask]])
-                total_weight = np.sum(weights)
-                
-                if total_weight > 1e-8:  # Seuil de stabilité
-                    # Extraction des vitesses longitudinales (composante x)
-                    u_x = velocities[mask, 0]
-                    u_center_all[t, i] = np.sum(weights * u_x) / total_weight
-    
-    # Moyenne sur tous les pas de temps
-    u_center = np.mean(u_center_all, axis=0)
-
-    plt.figure()
-    plt.plot(x_line, u_center/U_carac)
-    plt.xlabel("x [m]")
-    plt.ylabel("u [m/s]")
-    plt.title("Centerline velocity profile")
-    plt.grid()
-    
 
 def analyze_particle_distribution(vtk_data, x_slice, delta_x=0.1, n_bins=50, plot=True):
    
@@ -218,6 +164,7 @@ def find_particles_in_rectangle(points, x_min, y_min, x_max, y_max):
     
     return inside_mask, rectangle
 
+
 def project_particles(vtk_data, mask, rectangle):
 
     # Particles inside the rectangle
@@ -261,78 +208,183 @@ def project_particles(vtk_data, mask, rectangle):
     return projected_points, projected_attributes, vertical_line
 
 
-def shapely_single_slice(fully_dev_vtk, 
-                         y_min, y_max, 
-                         x_pos, 
-                         slice_width,
-                         attribute):
+def remove_part(u_data, rho_data, y_data, min_part):
 
+    idx_sorted = np.argsort(rho_data)
+    idx_kept = np.sort(idx_sorted[:min_part])
+    return u_data[idx_kept], rho_data[idx_kept], y_data[idx_kept]
+    
 
-    attr_all = []
+def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot):
+    
+    u_all = []
+    rho_all = []
     y_all = []
 
-    x_min = x_pos - slice_width/2
-    x_max = x_pos + slice_width/2
+    x_min = x_pos - slice_width
+    x_max = x_pos + slice_width
+
+    current_min_particles = float('inf')
 
     for i, single_vtk in enumerate(fully_dev_vtk):
-        
         if i == 0:
             continue
 
         inside_mask, rectangle = find_particles_in_rectangle(single_vtk.points, x_min, y_min, x_max, y_max)
-
         projected_points, projected_attributes, vertical_line = project_particles(
             single_vtk, inside_mask, rectangle)
         
-        if attribute=="velocity":
-            attr_all.append(projected_attributes['velocity'][:, 0])
-        elif attribute=="density":
-            attr_all.append(projected_attributes['density'])
-        y_all.append(projected_points[:, 1])
+        u_data = projected_attributes['velocity'][:, 0]
+        rho_data = projected_attributes['density']
+        y_data = projected_points[:, 1]
 
-    for i in range(len(attr_all)):
-        plt.scatter(y_all[i], attr_all[i], s=5)
+        nb_part = len(y_data)
         
-    plt.legend()
-    plt.savefig(f'Pictures/turbulent/single_slice_{attribute}_x_{x_pos}.png')
-    
+        if nb_part < current_min_particles:
+            current_min_particles = nb_part
+            
+            for j in range(len(u_all)):
+                if len(u_all[j]) > nb_part:
+                    u_all[j], rho_all[j], y_all[j] = remove_part(u_all[j], rho_all[j], y_all[j], nb_part)
+                    
+                    assert len(u_all[j]) == nb_part, f"Erreur: après remove_part, j={j}, len(u_all[j])={len(u_all[j])}, should be {nb_part}"
+        
+        rho_all.append(rho_data)
+        u_all.append(u_data)
+        y_all.append(y_data)
+        
+        if len(u_data) > current_min_particles:
+            u_all[-1], rho_all[-1], y_all[-1] = remove_part(u_data, rho_data, y_data, current_min_particles)
+            
+            assert len(u_all[-1]) == current_min_particles
 
-def shapely_multiple_slices(vtk_data, x_start, x_end, num_slices, y_min, y_max, attribute, slice_width):
+      
+    u_min, u_max = [], []
+    rho_min, rho_max = [], []
+    if plot:
+        plt.figure()
+        for i in range(len(u_all)):
+
+            plt.scatter(y_all[i], u_all[i], s=5)
+            u_min.append(np.min(u_all[i]))
+            u_max.append(np.max(u_all[i]))
+            rho_min.append(np.min(rho_all[i]))
+            rho_max.append(np.max(rho_all[i]))
+
+        u_min_min = np.min(u_min)
+        u_max_max = np.max(u_max)
+        rho_min_min = np.min(rho_min)
+        rho_max_max = np.max(rho_max)
+
+
+        #plt.legend()
+        plt.ylabel('Velocity u(y) [m/s]')
+        plt.xlabel('Diameter y [m]')
+        plt.ylim(u_min_min, u_max_max)
+        plt.savefig(f'Pictures/CH5/u_slice_x_{x_pos}.pdf')
+
+        plt.figure()
+        for i in range(len(u_all)):
+            plt.scatter(y_all[i], rho_all[i], s=5)
+        plt.ylim(990, 1010)
+        plt.ylabel(r'Density $\rho$ [kg/$m^3$]')
+        plt.xlabel('Diameter y [m]')
+        plt.savefig(f'Pictures/CH5/rho_slice_x_{x_pos}.pdf')
+
+        plt.show()
+
+    return u_all, rho_all, y_all
+
+
+
+def multiple_slices(vtk_data, 
+                    x_start, x_end, 
+                    num_slices, 
+                    y_min, y_max, 
+                    slice_width, 
+                    plot):
     
     x_positions = np.linspace(x_start, x_end, num_slices)
-    attr_all = []
+    u_all = []
+    rho_all = []
     y_all = []
-    
-    plt.figure(figsize=(12, 8))
-    
+    current_min_particles = float('inf')
+        
     for x_pos in x_positions:
 
-        x_min = x_pos - slice_width/2
-        x_max = x_pos + slice_width/2
+        x_min = x_pos - slice_width
+        x_max = x_pos + slice_width
         
-        inside_mask, rectangle = find_particles_in_rectangle(vtk_data.points, x_min, y_min, x_max, y_max)        
+        inside_mask, rectangle = find_particles_in_rectangle(vtk_data.points, x_min, y_min, x_max, y_max)   
+          
         projected_points, projected_attributes, vertical_line = project_particles(
             vtk_data, inside_mask, rectangle)
         
-        if attribute == "velocity":
-            attr = projected_attributes['velocity'][:, 0]
-        elif attribute == "density":
-            attr = projected_attributes['density']
+        u_data = projected_attributes['velocity'][:, 0]
+        rho_data = projected_attributes['density']
+        y_data = projected_points[:, 1]
         
-        attr_all.append(attr)
+        nb_part = len(y_data)
         
-        if len(projected_points) > 0:
-            plt.scatter(projected_points[:, 1], attr, s=3, 
-                      label=f"x = {x_pos:.2f}", alpha=0.7)
-    
-    plt.ylabel('Velocity')
-    plt.xlabel('y')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f'Pictures/turbulent/mult_slices_{attribute}.png')
+        if nb_part < current_min_particles:
+            current_min_particles = nb_part
+            
+            for j in range(len(u_all)):
+                if len(u_all[j]) > nb_part:
+                    u_all[j], rho_all[j], y_all[j] = remove_part(u_all[j], rho_all[j], y_all[j], nb_part)
+                    
+                    assert len(u_all[j]) == nb_part, f"Erreur: après remove_part, j={j}, len(u_all[j])={len(u_all[j])}, should be {nb_part}"
+        
+        
+        
+        
+        u_all.append(u_data)
+        rho_all.append(rho_data)
+        y_all.append(y_data)
 
-    return attr_all, y_all
+        if len(u_data) > current_min_particles:
+            u_all[-1], rho_all[-1], y_all[-1] = remove_part(u_data, rho_data, y_data, current_min_particles)
+            
+            assert len(u_all[-1]) == current_min_particles, f"Erreur: après remove_part pour le dernier élément, len(u_all[-1])={len(u_all[-1])}, should be {current_min_particles}"
+    
+        
+    if plot:
+        u_min, u_max = [], []
+        rho_min, rho_max = [], []
+
+        plt.figure()
+        for i in range(len(u_all)):
+            plt.scatter(y_all[i], u_all[i], s=5)
+            u_min.append(np.min(u_all[i]))
+            u_max.append(np.max(u_all[i]))
+        
+        u_min_min = np.min(u_min)
+        u_max_max = np.max(u_max)
+        
+            
+        #plt.legend()
+        plt.ylabel('Velocity u(y) [m/s]')
+        plt.xlabel('Diameter y [m]')
+        #plt.ylim(u_min_min, u_max_max)
+        plt.savefig(f'Pictures/CH5/u_multiple.pdf')
+
+        plt.figure()
+        for i in range(len(u_all)):
+            plt.scatter(y_all[i], rho_all[i], s=5)
+            rho_min.append(np.min(rho_all[i]))
+            rho_max.append(np.max(rho_all[i]))
+
+        rho_min_min = np.min(rho_min)
+        rho_max_max = np.max(rho_max)
+
+        plt.ylabel(r'Density $\rho$ [kg/$m^3$]')
+        plt.xlabel('Diameter y [m]')
+        #plt.ylim(rho_min_min, rho_max_max)
+        plt.savefig(f'Pictures/CH5/rho_multiple.pdf')
+
+        plt.show()
+
+    return u_all, y_all
 
 def visualize_results(vtk_data, inside_mask, projected_points, rectangle, vertical_line):
 
@@ -352,36 +404,76 @@ def visualize_results(vtk_data, inside_mask, projected_points, rectangle, vertic
     plt.xlim(0.8*rectangle.bounds[0] , 1.2*rectangle.bounds[2])
     plt.ylim(rectangle.bounds[1] - 0.3 , 1.2*rectangle.bounds[3])
     plt.grid(True)
-    plt.savefig('Pictures/turbulent/shapely_visualization.png')
+    plt.savefig('Pictures/CH5/visualization.png')
 
 
-def integrate_slice(Q_init, u_all, y_all):
+def integrate_slice(Q_init, x_span, u_all, y_all):
     integrals = []
+    valid_indices = []
     
-    for u, y in zip(u_all, y_all):
-        u = np.array(u)
-        y = np.array(y)
+    for idx, (u, y) in enumerate(zip(u_all, y_all)):
+        u, y = np.array(u), np.array(y)
         
-        # Vérifier que les points sont triés par y croissant
         if not np.all(np.diff(y) > 0):
             sort_idx = np.argsort(y)
-            y = y[sort_idx]
-            u = u[sort_idx]
+            y, u = y[sort_idx], u[sort_idx]
+        
+        int_value = simpson(u, x=y)
+        if int_value < 0:
+            print(f"Intégrale négative à x = {x_span[idx]}")
+            continue
             
-        # Intégration avec Simpson (meilleur choix pour données discrètes)
-        integral_value = simpson(u, x=y)
-        print(f"Intégrale pour la slice : {integral_value}")
-        integrals.append(integral_value)
+        integrals.append(int_value)
+        valid_indices.append(idx)
     
-    # Visualisation des résultats
-    plt.figure(figsize=(10, 6))
-    plt.hlines(np.ones(len(integrals)) * Q_init, 0, len(integrals), color='red', linestyle='--', label='Q_init')
-    plt.bar(range(len(integrals)), integrals)
-    plt.xlabel('Numéro de slice')
+    filtered_x_span = x_span[valid_indices]
+    print(f"Nombre d'intégrales valides: {len(integrals)} sur {len(u_all)}")
+    
+    # Filtrer les outliers
+    p95 = np.percentile(integrals, 95)
+    outlier_filter = [i for i, val in enumerate(integrals) if val <= p95]
+    filtered_integrals = [integrals[i] for i in outlier_filter]
+    filtered_mean = np.mean(filtered_integrals)
+    filtered_x = filtered_x_span[outlier_filter]
+    
+    # Graphiques
+    plt.figure(figsize=(12, 6))
+    
+    plt.subplot(1, 2, 1)
+    plt.bar(filtered_x_span, integrals, width=0.6, alpha=0.7, color='royalblue')
+    plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label='Q_init')
+    plt.xlabel('Position x')
     plt.ylabel('Intégrale ∫u(y)dy')
-    plt.grid(True)
-    plt.savefig('Pictures/turbulent/slice_integrals.png')
-
+    plt.title('Intégrales positives')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
     
-    return integrals
+    plt.subplot(1, 2, 2)
+    plt.bar(filtered_x, filtered_integrals, alpha=0.7, color='seagreen')
+    plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label='Q_init')
+    plt.hlines(filtered_mean, 0, np.max(x_span), color='darkgreen', linestyle='-', linewidth=2, label='Moyenne')
+    plt.xlabel('Position x')
+    plt.ylabel('Intégrale ∫u(y)dy')
+    plt.title('95e percentile')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig('Pictures/CH5/slice_integrals_comparison.png', dpi=300)
+    plt.show()
+    
+    return integrals, filtered_integrals
+def main():
+
+    U_0 = 5
+    delta = 0.1
+    gamma = 0.7
+
+    u_ghe = compute_u_ghe(np.linspace(-0.5, 0.5, 100), U_0, delta, gamma)[0]
+    plt.figure()
+    plt.plot(np.linspace(-0.5, 0.5, 100), u_ghe)
+    plt.show()
+
+if __name__=="__main__":
+    main()
 
