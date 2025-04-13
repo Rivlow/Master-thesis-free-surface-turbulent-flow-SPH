@@ -13,12 +13,29 @@ from scipy.optimize import curve_fit
 
 sys.path.append((os.getcwd()))
 
+# Style configuration
+SMALL_SIZE = 16
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 18
+plt.rc('font', size=SMALL_SIZE)          
+plt.rc('axes', titlesize=MEDIUM_SIZE)    
+plt.rc('axes', labelsize=MEDIUM_SIZE)    
+plt.rc('xtick', labelsize=MEDIUM_SIZE)   
+plt.rc('ytick', labelsize=MEDIUM_SIZE)   
+plt.rc('legend', fontsize=SMALL_SIZE)    
+plt.rc('figure', titlesize=BIGGER_SIZE)   
+
+def configure_latex():
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+
+
 
 def compute_u_ghe(y_line, U_0, delta, gamma):
 
-    if len(y_line) % 2 == 0:  # Si nombre pair
+    if len(y_line) % 2 == 0:  
         size_half = len(y_line) // 2
-    else:  # Si nombre impair
+    else: 
         size_half = (len(y_line) + 1) // 2
 
 
@@ -41,49 +58,64 @@ def compute_u_ghe(y_line, U_0, delta, gamma):
     
     return U_full, U_L_full, U_T_full
 
-def u_ghe_wrapper(y_line, delta, gamma):
-    # Supposons que U_0 est connu/fixé
-    U_0 = 1.0  # À remplacer par la valeur réelle de U_0 si connue
-    u_full, _, _ = compute_u_ghe(y_line, U_0, delta, gamma)
-    return u_full
-
-def fit_ghe_model(u_exp, y_exp, U_0=1.0):
+def fit_ghe_model(u_all, y_all, y_min, plot=False, save=False):
     
-    if U_0 is None:
-        U_0 = np.max(u_exp)
+    # Flatten all slices into single arrays
+    u_flat = np.concatenate([u_slice for u_slice in u_all])
+    y_flat = np.concatenate([y_slice for y_slice in y_all])
     
+    # Sort by y position for cleaner plotting
+    sort_idx = np.argsort(y_flat)
+    u_flat_sorted = u_flat[sort_idx]
+    y_flat_sorted = y_flat[sort_idx]
+    
+    # Alternatively, you can use mean profile as you were doing
+    u_mean_exp = np.mean(u_all, axis=0)
+    y_exp_single = y_all[0]
+    
+    # For fitting, you can either:
+    # 1. Use the mean profile (as you were doing)
+    # 2. Use all data points for a more robust fit
+    
+    U_0 = np.max(u_flat_sorted)  # or np.max(u_flat)
+    
+    # Rest of your fitting code...
+    # To fit with all points:
     def fit_func(y, delta, gamma):
-        u_model, _, _ = compute_u_ghe(y, U_0, delta, gamma)
+        # You'll need to modify this to handle unsorted y values
+        # or pre-sort y_flat before fitting
+        u_model = compute_u_ghe(y, U_0, delta, gamma)[0]
         return u_model
     
-    # Valeurs initiales pour delta et gamma
-    initial_guess = [0.1, 0.5]  # delta=0.1, gamma=0.5
+    initial_guess = [0.01, 0.5]
     
-    # Bornes pour les paramètres (optionnel mais recommandé)
-    bounds = ([0.001, 0], [1.0, 1.0])  # delta ∈ [0.001, 1], gamma ∈ [0, 1]
+    # Choose which approach to use:
+    # 1. Fit using mean profile (as you were doing):
+    popt, pcov = curve_fit(fit_func, y_flat_sorted, u_flat_sorted, p0=initial_guess)
+    delta_opt, gamma_opt = popt
+    perr = np.sqrt(np.diag(pcov))
     
-    try:
+    u_fitted, u_laminar, u_turbulent = compute_u_ghe(u_flat_sorted, U_0, delta_opt, gamma_opt)
+    y_plot = np.linspace(y_min, -y_min, len(u_fitted))
+    
+    print(f"Optimal param: delta = {delta_opt} +- {perr[0]}, gamma = {gamma_opt} +- {perr[1]}")
 
-        popt, pcov = curve_fit(fit_func, y_exp, u_exp, p0=initial_guess, bounds=bounds)
-        delta_opt, gamma_opt = popt
-        perr = np.sqrt(np.diag(pcov))
+    if plot:
+        configure_latex()
+        plt.figure(figsize=(6.7, 5))
+        plt.scatter(y_flat_sorted, u_flat_sorted, s=7, alpha = 0.7, color='blue', label= 'SPH data')
+        plt.plot(y_plot, u_fitted, color = 'red', label='Fitted model')
+        plt.xlabel('Diameter y [m]')
+        plt.ylabel('Velocity u(y) [m/s]')
+        plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        plt.tight_layout()
         
-        u_fitted, u_laminar, u_turbulent = compute_u_ghe(y_exp, U_0, delta_opt, gamma_opt)
-        
-        print(f"Paramètres optimisés: delta = {delta_opt:.6f} ± {perr[0]:.6f}, gamma = {gamma_opt:.6f} ± {perr[1]:.6f}")
-        
-        return {
-            'delta': delta_opt,
-            'gamma': gamma_opt,
-            'error': perr,
-            'u_fitted': u_fitted,
-            'u_laminar': u_laminar,
-            'u_turbulent': u_turbulent
-        }
+        plt.legend(loc='best')
+        if save:
+            plt.savefig(f'Pictures/CH5_valid_test/turbulent/u_fit_single.pdf')
     
-    except Exception as e:
-        print(f"Erreur lors de l'ajustement: {e}")
-        return None
+    
+    
 
 
 def analyze_particle_distribution(vtk_data, x_slice, delta_x=0.1, n_bins=50, plot=True):
@@ -120,7 +152,8 @@ def analyze_particle_distribution(vtk_data, x_slice, delta_x=0.1, n_bins=50, plo
     low_density_regions = bin_centers[density_per_bin < low_density_threshold]
     
     if plot:
-        fig, ax = plt.subplots(figsize=(10, 8))
+        configure_latex()
+        fig, ax = plt.subplots(figsize=(6.7, 5))
         ax.bar(bin_centers, counts, width=bin_width*0.9, alpha=0.7, color='steelblue')
         
         if len(high_density_regions) > 0:
@@ -215,7 +248,7 @@ def remove_part(u_data, rho_data, y_data, min_part):
     return u_data[idx_kept], rho_data[idx_kept], y_data[idx_kept]
     
 
-def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot):
+def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot=False, save=False):
     
     u_all = []
     rho_all = []
@@ -262,7 +295,8 @@ def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot):
     u_min, u_max = [], []
     rho_min, rho_max = [], []
     if plot:
-        plt.figure()
+        configure_latex()
+        plt.figure(figsize=(6.7, 5))
         for i in range(len(u_all)):
 
             plt.scatter(y_all[i], u_all[i], s=5)
@@ -276,22 +310,24 @@ def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot):
         rho_min_min = np.min(rho_min)
         rho_max_max = np.max(rho_max)
 
-
-        #plt.legend()
         plt.ylabel('Velocity u(y) [m/s]')
-        plt.xlabel('Diameter y [m]')
+        plt.xlabel('Distance y [m]')
         plt.ylim(u_min_min, u_max_max)
-        plt.savefig(f'Pictures/CH5/u_slice_x_{x_pos}.pdf')
+        plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'Pictures/CH5_valid_test/turbulent/u_single_x_{x_pos}.pdf')
 
-        plt.figure()
+        plt.figure(figsize=(6.7, 5))
         for i in range(len(u_all)):
             plt.scatter(y_all[i], rho_all[i], s=5)
         plt.ylim(990, 1010)
         plt.ylabel(r'Density $\rho$ [kg/$m^3$]')
-        plt.xlabel('Diameter y [m]')
-        plt.savefig(f'Pictures/CH5/rho_slice_x_{x_pos}.pdf')
-
-        plt.show()
+        plt.xlabel('Distance y [m]')
+        plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'Pictures/CH5_valid_test/turbulent/rho_single_x_{x_pos}.pdf')
 
     return u_all, rho_all, y_all
 
@@ -302,7 +338,8 @@ def multiple_slices(vtk_data,
                     num_slices, 
                     y_min, y_max, 
                     slice_width, 
-                    plot):
+                    plot=False,
+                    save=False):
     
     x_positions = np.linspace(x_start, x_end, num_slices)
     u_all = []
@@ -349,10 +386,11 @@ def multiple_slices(vtk_data,
     
         
     if plot:
+        configure_latex()
         u_min, u_max = [], []
         rho_min, rho_max = [], []
 
-        plt.figure()
+        plt.figure(figsize=(6.7, 5))
         for i in range(len(u_all)):
             plt.scatter(y_all[i], u_all[i], s=5)
             u_min.append(np.min(u_all[i]))
@@ -364,11 +402,14 @@ def multiple_slices(vtk_data,
             
         #plt.legend()
         plt.ylabel('Velocity u(y) [m/s]')
-        plt.xlabel('Diameter y [m]')
+        plt.xlabel('Distance y [m]')
         #plt.ylim(u_min_min, u_max_max)
-        plt.savefig(f'Pictures/CH5/u_multiple.pdf')
+        plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'Pictures/CH5_valid_test/turbulent/u_multiple.pdf')
 
-        plt.figure()
+        plt.figure(figsize=(6.7, 5))
         for i in range(len(u_all)):
             plt.scatter(y_all[i], rho_all[i], s=5)
             rho_min.append(np.min(rho_all[i]))
@@ -378,9 +419,12 @@ def multiple_slices(vtk_data,
         rho_max_max = np.max(rho_max)
 
         plt.ylabel(r'Density $\rho$ [kg/$m^3$]')
-        plt.xlabel('Diameter y [m]')
+        plt.xlabel('Distance y [m]')
         #plt.ylim(rho_min_min, rho_max_max)
-        plt.savefig(f'Pictures/CH5/rho_multiple.pdf')
+        plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        plt.tight_layout()
+        if save:
+            plt.savefig(f'Pictures/CH5_valid_test/turbulent/rho_multiple.pdf')
 
         plt.show()
 
@@ -388,23 +432,30 @@ def multiple_slices(vtk_data,
 
 def visualize_results(vtk_data, inside_mask, projected_points, rectangle, vertical_line):
 
-    plt.figure(figsize=(10, 8))
-    
+    plt.figure(figsize=(6.7, 5))
+
+    configure_latex()
+
     points = vtk_data.points
     plt.scatter(points[:, 0], points[:, 1], s=1, alpha=0.5, label='All particles')
     inside_points = points[inside_mask]
-    plt.scatter(inside_points[:, 0], inside_points[:, 1], s=3, c='red', label='Particles in rectangle')
-    plt.scatter(projected_points[:, 0], projected_points[:, 1], s=3, c='green', label='Projections')
+    plt.scatter(inside_points[:, 0], inside_points[:, 1], s=3, c='red', label='Framed particles ')
+    plt.scatter(projected_points[:, 0], projected_points[:, 1], s=3, c='green')
     
     x, y = rectangle.exterior.xy
-    plt.plot(x, y, 'b-', label='Rectangle')
+    plt.plot(x, y, 'b-')
     x, y = vertical_line.xy
-    plt.plot(x, y, 'g-', linewidth=2, label='Vertical line')
-    plt.axis('equal')
-    plt.xlim(0.8*rectangle.bounds[0] , 1.2*rectangle.bounds[2])
+    plt.plot(x, y, 'g-', linewidth=2, label='Projected particles')
+    #plt.axis('equal')
+    plt.xlim((34.5 , 36))
     plt.ylim(rectangle.bounds[1] - 0.3 , 1.2*rectangle.bounds[3])
+    plt.ylabel('Distance y [m]')
+    plt.xlabel('Position x [m]')
+    plt.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
     plt.grid(True)
-    plt.savefig('Pictures/CH5/visualization.png')
+    plt.tight_layout()
+    
+    plt.savefig('Pictures/CH5_valid_test/turbulent/euler_area.pdf', )
 
 
 def integrate_slice(Q_init, x_span, u_all, y_all):
@@ -420,17 +471,17 @@ def integrate_slice(Q_init, x_span, u_all, y_all):
         
         int_value = simpson(u, x=y)
         if int_value < 0:
-            print(f"Intégrale négative à x = {x_span[idx]}")
+            print(f"Negative integral at x = {x_span[idx]}")
             continue
             
         integrals.append(int_value)
         valid_indices.append(idx)
     
     filtered_x_span = x_span[valid_indices]
-    print(f"Nombre d'intégrales valides: {len(integrals)} sur {len(u_all)}")
+    print(f"Valid number of integrals: {len(integrals)} over {len(u_all)}")
     
     # Filtrer les outliers
-    p95 = np.percentile(integrals, 95)
+    p95 = np.percentile(integrals, 90)
     outlier_filter = [i for i, val in enumerate(integrals) if val <= p95]
     filtered_integrals = [integrals[i] for i in outlier_filter]
     filtered_mean = np.mean(filtered_integrals)
@@ -441,28 +492,30 @@ def integrate_slice(Q_init, x_span, u_all, y_all):
     
     plt.subplot(1, 2, 1)
     plt.bar(filtered_x_span, integrals, width=0.6, alpha=0.7, color='royalblue')
-    plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label='Q_init')
-    plt.xlabel('Position x')
-    plt.ylabel('Intégrale ∫u(y)dy')
-    plt.title('Intégrales positives')
+    plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label=r'$Q_{\text{init}}$')
+    plt.hlines(filtered_x_span, 0, np.mean(integrals), color='darkgreen', linestyle='-', linewidth=2, label='Mean')
+    plt.xlabel('Position x [m]')
+    plt.ylabel('Integral int u(y)dy')
     plt.grid(True, alpha=0.3)
     plt.legend()
     
     plt.subplot(1, 2, 2)
     plt.bar(filtered_x, filtered_integrals, alpha=0.7, color='seagreen')
     plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label='Q_init')
-    plt.hlines(filtered_mean, 0, np.max(x_span), color='darkgreen', linestyle='-', linewidth=2, label='Moyenne')
+    plt.hlines(filtered_mean, 0, np.max(x_span), color='darkgreen', linestyle='-', linewidth=2, label='Mean')
     plt.xlabel('Position x')
-    plt.ylabel('Intégrale ∫u(y)dy')
+    plt.ylabel('Integral intu(y)dy')
     plt.title('95e percentile')
     plt.grid(True, alpha=0.3)
     plt.legend()
     
-    plt.tight_layout()
-    plt.savefig('Pictures/CH5/slice_integrals_comparison.png', dpi=300)
+    #plt.tight_layout()
+    #plt.savefig('Pictures/CH5_valid_test/slice_integrals_comparison.pdf', dpi=300)
     plt.show()
     
     return integrals, filtered_integrals
+
+
 def main():
 
     U_0 = 5
