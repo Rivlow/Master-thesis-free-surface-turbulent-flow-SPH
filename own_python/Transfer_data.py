@@ -117,6 +117,7 @@ def load_vtk_files(folder_path, print_files):
 if __name__ == "__main__":
     
     source_path = "SPlisHSPlasH/bin/output/free_surface_pressure_2D/vtk"
-    destination_path = "output/free_surface/pressure/test_3"
+    destination_path = "output/free_surface/BC/at_outlet/r_001/maybe"
     
     transfer_vtk_files(source_path, destination_path)
+    
