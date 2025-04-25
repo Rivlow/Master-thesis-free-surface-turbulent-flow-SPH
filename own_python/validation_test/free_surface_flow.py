@@ -25,13 +25,13 @@ from own_python.write_scenes.Tools_scenes import *
 SMALL_SIZE = 16
 MEDIUM_SIZE = 18
 BIGGER_SIZE = 18
-plt.rc('font', size=SMALL_SIZE)          
-plt.rc('axes', titlesize=MEDIUM_SIZE)    
-plt.rc('axes', labelsize=MEDIUM_SIZE)    
-plt.rc('xtick', labelsize=MEDIUM_SIZE)   
-plt.rc('ytick', labelsize=MEDIUM_SIZE)   
-plt.rc('legend', fontsize=SMALL_SIZE)    
-plt.rc('figure', titlesize=BIGGER_SIZE)   
+plt.rc('font', size=SMALL_SIZE)
+plt.rc('axes', titlesize=MEDIUM_SIZE)
+plt.rc('axes', labelsize=MEDIUM_SIZE)
+plt.rc('xtick', labelsize=MEDIUM_SIZE)
+plt.rc('ytick', labelsize=MEDIUM_SIZE)
+plt.rc('legend', fontsize=SMALL_SIZE)
+plt.rc('figure', titlesize=BIGGER_SIZE)
 
 def configure_latex():
     plt.rc('text', usetex=True)
@@ -41,7 +41,7 @@ def configure_latex():
 
 # Constants
 cm = 1e-2  # centimeter in meters
-m = 1      # meter 
+m = 1      # meter
 s = 1      # second
 g = 9.81   # gravitational acceleration (m/s²)
 
@@ -50,12 +50,12 @@ g = 9.81   # gravitational acceleration (m/s²)
 def compute_Fr(q, g, h):
     """
     Calculate the Froude number.
-    
+
     Args:
         q (float): Flow rate per unit width (m²/s)
         g (float): Gravitational acceleration (m/s²)
         h (float): Water height (m)
-        
+
     Returns:
         float: Froude number
     """
@@ -65,22 +65,22 @@ def compute_Fr(q, g, h):
 def solve_height(q, g, x, z_b, H):
     """
     Solve the water height equation.
-    
+
     Args:
         q (float): Flow rate per unit width (m²/s)
         g (float): Gravitational acceleration (m/s²)
         x (float): Horizontal position (m)
         z_b (function): Bed profile function
         H (float): Total hydraulic head
-        
+
     Returns:
         tuple: Water height solution and convergence information
     """
     def eq(h):
-        if h <= 0.001:  
+        if h <= 0.001:
             return float('inf')
         return z_b(x) + h + q**2 / (2 * g * h**2) - H
-    
+
     h0 = 0.1  # Initial guess
     return fsolve(eq, h0, full_output=True)
 
@@ -88,12 +88,12 @@ def solve_height(q, g, x, z_b, H):
 def conjugate_height(q, g, h):
     """
     Calculate the conjugate height after a hydraulic jump.
-    
+
     Args:
         q (float): Flow rate per unit width (m²/s)
         g (float): Gravitational acceleration (m/s²)
         h (float): Water height upstream of the jump (m)
-        
+
     Returns:
         float: Conjugate water height (m)
     """
@@ -104,25 +104,25 @@ def conjugate_height(q, g, h):
 def solve_height_amont(q, g, x, z_b, H):
     """
     Solve the upstream water height equation.
-    
+
     Args:
         q (float): Flow rate per unit width (m²/s)
         g (float): Gravitational acceleration (m/s²)
         x (float): Horizontal position (m)
         z_b (function): Bed profile function
         H (float): Total hydraulic head upstream
-        
+
     Returns:
         float: Upstream water height (m)
     """
     # Équation: h³ + (z_b(x) - H)·h² + 0·h + q²/(2*g)
     a = z_b(x) - H
-    b = 0 
+    b = 0
     c = q**2 / (2 * g)
-    
+
     coeffs = [1, a, b, c]
     roots = np.roots(coeffs)
-    
+
     real_positive_roots = np.array([root.real for root in roots if root.real > 0])
 
     if 10 < x <= 12:
@@ -224,52 +224,53 @@ def extract_water_height(vtk_file, plot=False, save=False):
         ax1.set_ylabel('Height h(x) [m]')
         ax1.legend()
         ax1.grid(True)
-        
+
         # Graphique du nombre de Froude
         ax2.scatter(h[:, 0], Fr, s=20, color='green', label='Froude number')
         ax2.set_xlabel('Position x [m]')
         ax2.set_ylabel('Froude number Fr [-]')
         ax2.legend()
         ax2.grid(True)
-        
+
         plt.tight_layout()
         if save:
             plt.savefig('Pictures/CH5_valid_test/free_surface/water_height_velocity_sph.pdf', dpi=300)
         plt.show()
-    
+
     return pos, h, u_surf
 
 
 def compute_theoretical_water_height(U_0):
     """
     Calculate the theoretical water height.
-    
+
     Args:
         U_0 (float): Initial flow velocity (m/s)
-        
+
     Returns:
         tuple: (x positions, bed heights z, water heights h, Froude numbers Fr)
     """
     g = 9.81 * (m/(s**2))
 
     # Parabola function (bed profile)
-    z_b = lambda x: 0.2 - 0.05*((x-10)**2) if 8 <= x <= 12 else 0 
+    z_b = lambda x: 0.2 - 0.05*((x-10)**2) if 8 <= x <= 12 else 0
 
-    D = 0.5 * m
+    D = 0.46 * m
     
+
     # Boundary conditions
-    q = 0.18 * (m**2/s)          # inlet mass flow
+    q = U_0*D * (m**2/s)          # inlet mass flow
     h_aval = 33 * cm             # outlet water height
 
     # Compute critical height
-    h_cr = (q**2/g)**(1/3)       
+    h_cr = (q**2/g)**(1/3)
     x_cr = 10 * m
     x_ressaut = 11.6657          # previously evaluated
-    
+
     # Using Bernoulli, upstream/downstream total head
     H_amont = z_b(10) + h_cr + q**2/(2*g*h_cr**2)
     H_aval = 0 + h_aval + q**2/(2*g*h_aval**2)
-    
+
     nb_elem = 2000
     x_amont = np.linspace(0, x_ressaut, nb_elem)
     x_aval = np.linspace(25, x_ressaut, nb_elem)
@@ -285,7 +286,7 @@ def compute_theoretical_water_height(U_0):
     h_inter = np.linspace(h_amont[-1], h_aval[-1], nb_elem)
     x_inter = np.linspace(x_amont[-1], x_aval[-1], nb_elem)
     z_inter = np.array([z_b(x) for x in x_inter])
-    
+
     # Froude numbers over whole distance
     Fr_amont = np.array([compute_Fr(q, g, h) for h in h_amont])
     Fr_aval = np.array([compute_Fr(q, g, h) for h in h_aval])
@@ -293,7 +294,7 @@ def compute_theoretical_water_height(U_0):
 
     # Conjugated heights h2 from h1(x_aval)
     h2_conj = np.array([conjugate_height(q, g, h1) for h1 in h_amont])
-       
+
     # Concaténation des tableaux
     x_all = np.concatenate((x_amont, x_inter, x_aval))
     z_all = np.concatenate((z_amont, z_inter, z_aval))
@@ -313,11 +314,11 @@ def compute_theoretical_water_height(U_0):
 def compute_mass_flow_rate(x_span, vtk):
     """
     Calculate the mass flow rate.
-    
+
     Args:
         x_span (array): Range of x positions
         vtk: VTK data
-        
+
     Returns:
         float: Average mass flow rate
     """
@@ -337,14 +338,14 @@ def compute_mass_flow_rate(x_span, vtk):
         u_inlet = u[filter_mask]
         x_inlet = x[filter_mask]
         y_inlet = y[filter_mask]
-    
+
         # Sort by height
         sort_indices = np.argsort(y_inlet)
         y_sort = y_inlet[sort_indices]
         x_sort = x_inlet[sort_indices]
         u_sort = u_inlet[sort_indices]
         rho_sort = rho_inlet[sort_indices]
-    
+
         # Calculate integral
         print(rho_sort)
         integral = simpson(rho_sort * u_sort, x=y_sort)
@@ -356,7 +357,7 @@ def compute_mass_flow_rate(x_span, vtk):
 def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
     """
     Plot water height.
-    
+
     Args:
         Ly (float): Domain height
         x_th (array): Theoretical x positions
@@ -367,9 +368,9 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
         save (bool): If True, saves the plot
     """
     z_sph = parabole(h_sph[:, 0])
-    h_sph[:, 1] -= Ly 
+    h_sph[:, 1] -= Ly
     points[:, 1] -= Ly
-    
+
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
     # Plot points and surfaces
@@ -393,13 +394,13 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
 
 
 def main():
-    """Main function."""
+
     # Initial velocity
     U_0 = 0.36 * (m/s)
 
     # Calculate theoretical water heights
     x_all, z_all, h_all, Fr_all = compute_theoretical_water_height(U_0)
-   
+
     # Create plot
     fig, ax1 = plt.subplots(figsize=(10, 6))
 

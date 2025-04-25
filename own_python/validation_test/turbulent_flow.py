@@ -381,7 +381,6 @@ def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot=False, sa
         
         if len(u_data) > current_min_particles:
             u_all[-1], rho_all[-1], y_all[-1] = remove_part(u_data, rho_data, y_data, current_min_particles)
-            
             assert len(u_all[-1]) == current_min_particles
 
     # Plotting
@@ -428,7 +427,7 @@ def single_slice(fully_dev_vtk, y_min, y_max, x_pos, slice_width, plot=False, sa
 
 
 def multiple_slices(vtk_data, x_start, x_end, num_slices, y_min, y_max, 
-                   slice_width, plot=False, save=False):
+                   slice_width, remove=False, plot=False, save=False):
     """
     Analyze particle data in multiple slices along the x-axis.
     
@@ -469,20 +468,20 @@ def multiple_slices(vtk_data, x_start, x_end, num_slices, y_min, y_max,
         if nb_part < current_min_particles:
             current_min_particles = nb_part
             
+        if remove:
             for j in range(len(u_all)):
                 if len(u_all[j]) > nb_part:
                     u_all[j], rho_all[j], y_all[j] = remove_part(u_all[j], rho_all[j], y_all[j], nb_part)
-                    
                     assert len(u_all[j]) == nb_part, f"Error: after remove_part, j={j}, len(u_all[j])={len(u_all[j])}, should be {nb_part}"
         
         u_all.append(u_data)
         rho_all.append(rho_data)
         y_all.append(y_data)
 
-        if len(u_data) > current_min_particles:
-            u_all[-1], rho_all[-1], y_all[-1] = remove_part(u_data, rho_data, y_data, current_min_particles)
-            
-            assert len(u_all[-1]) == current_min_particles, f"Error: after remove_part for last element, len(u_all[-1])={len(u_all[-1])}, should be {current_min_particles}"
+        if remove:
+            if len(u_data) > current_min_particles:
+                u_all[-1], rho_all[-1], y_all[-1] = remove_part(u_data, rho_data, y_data, current_min_particles)
+                assert len(u_all[-1]) == current_min_particles, f"Error: after remove_part for last element, len(u_all[-1])={len(u_all[-1])}, should be {current_min_particles}"
     
     # Plotting
     if plot:
@@ -526,7 +525,7 @@ def multiple_slices(vtk_data, x_start, x_end, num_slices, y_min, y_max,
 
         plt.show()
 
-    return u_all, y_all
+    return u_all, y_all, rho_all
 
 
 def visualize_results(vtk_data, inside_mask, projected_points, rectangle, vertical_line):
@@ -565,66 +564,138 @@ def visualize_results(vtk_data, inside_mask, projected_points, rectangle, vertic
     plt.savefig('Pictures/CH5_valid_test/turbulent/euler_area.pdf')
 
 
-def integrate_slice(Q_init, x_span, u_all, y_all, save=False):
+def integrate_slice(Q_init, rho_init, x_span, u_all, y_all, rho_all, save=False):
     """
-    Integrate velocity profiles to calculate flow rate and compare with initial value.
+    Integrate velocity profiles to calculate volumetric and mass flow rates and 
+    compare with initial values.
     
     Args:
-        Q_init (float): Initial flow rate
+        Q_init (float): Initial volumetric flow rate (m³/s)
+        rho_init (float): Initial/reference fluid density (kg/m³)
         x_span (array): X-coordinates of slices
         u_all (list): List of velocity arrays
         y_all (list): List of position arrays
-        save (bool): If True, saves the plot
+        rho_all (list): List of density arrays
+        save (bool): If True, saves the plots
         
     Returns:
-        tuple: (All integrals, Filtered integrals)
+        tuple: (Volumetric flow rates, Mass flow rates)
     """
-    integrals = []
+    # Initialize arrays to store results
+    vol_flow_rates = []
+    mass_flow_rates = []
     valid_indices = []
     
-    for idx, (u, y) in enumerate(zip(u_all, y_all)):
-        u, y = np.array(u), np.array(y)
-        
-        # Ensure y is sorted for integration
-        if not np.all(np.diff(y) > 0):
-            sort_idx = np.argsort(y)
-            y, u = y[sort_idx], u[sort_idx]
-        
-        int_value = simpson(u, x=y)
-        if int_value < 0:
-            print(f"Negative integral at x = {x_span[idx]}")
-            continue
+    # Calculate initial mass flow rate
+    mass_flow_init = Q_init * rho_init
+    
+    # Process each slice
+    for idx, (u, y, rho) in enumerate(zip(u_all, y_all, rho_all)):
+        try:
+            # Convert to numpy arrays if not already
+            u = np.array(u)
+            y = np.array(y)
+            rho = np.array(rho)
             
-        integrals.append(int_value)
-        valid_indices.append(idx)
+            # Skip if empty
+            if len(u) == 0 or len(y) == 0:
+                print(f"Empty data at slice {idx}, position x = {x_span[idx]}")
+                continue
+                
+            # Sort data by y-coordinate for integration
+            sort_idx = np.argsort(y)
+            y = y[sort_idx]
+            u = u[sort_idx]
+            rho = rho[sort_idx]
+            
+            # Calculate volumetric flow rate (m³/s per unit depth)
+            vol_flow = np.trapezoid(u, x=y)
+            
+            # Calculate mass flow rate (kg/s per unit depth)
+            mass_flow = np.trapezoid(rho*u, x=y)
+            
+            # Skip negative flow rates (likely integration errors)
+            if vol_flow < 0:
+                print(f"Negative volumetric flow at x = {x_span[idx]}")
+                continue
+                
+            # Store valid results
+            vol_flow_rates.append(vol_flow)
+            mass_flow_rates.append(mass_flow)
+            valid_indices.append(idx)
+            
+        except Exception as e:
+            print(f"Error processing slice {idx} at x = {x_span[idx]}: {str(e)}")
     
+    # Convert to numpy arrays for easier manipulation
+    valid_indices = np.array(valid_indices)
     filtered_x_span = x_span[valid_indices]
-    print(f"Valid number of integrals: {len(integrals)} over {len(u_all)}")
+    vol_flow_rates = np.array(vol_flow_rates)
+    mass_flow_rates = np.array(mass_flow_rates)
     
-    # Filter outliers
-    p95 = np.percentile(integrals, 100)
-    outlier_filter = [i for i, val in enumerate(integrals) if val <= p95]
-    filtered_integrals = [integrals[i] for i in outlier_filter]
-    filtered_mean = np.mean(filtered_integrals)
-    filtered_x = filtered_x_span[outlier_filter]
-
-    print(f'Mass flow error: {100*(Q_init - filtered_mean)/Q_init} %')
+    # Calculate statistics
+    mean_vol_flow = np.mean(vol_flow_rates)
+    mean_mass_flow = np.mean(mass_flow_rates)
+    vol_flow_error = 100 * (Q_init - mean_vol_flow) / Q_init
+    mass_flow_error = 100 * (mass_flow_init - mean_mass_flow) / mass_flow_init
     
-    # Plot
-    plt.figure(figsize=(6.7, 5))
+    print(f"Valid slices: {len(valid_indices)} out of {len(u_all)}")
+    print(f"Mean volumetric flow rate: {mean_vol_flow:.6f} m³/s")
+    print(f"Volumetric flow error: {vol_flow_error:.2f}%")
+    print(f"Mean mass flow rate: {mean_mass_flow:.6f} kg/s")
+    print(f"Mass flow error: {mass_flow_error:.2f}%")
     
-    plt.bar(filtered_x, filtered_integrals, alpha=0.7, color='seagreen')
-    plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label=r'$Q_{\text{init}}$')
-    plt.hlines(filtered_mean, 0, np.max(x_span), color='darkgreen', linestyle='-', linewidth=2, label=r'$Q_{\text{SPH}} [m^3/s]$ ')
-    plt.xlabel('Position x [m]')
-    plt.ylabel(r'Mass flow rate $\int u(y)$ dy')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    if save:
-        plt.savefig('Pictures/CH5_valid_test/turbulent/massflow_conservation.pdf', dpi=300)
+    # Plot results
+    if save or True:  # Always plot for now
+        # Volumetric flow rate
+        plt.figure(figsize=(10, 6))
+        plt.bar(filtered_x_span, vol_flow_rates, alpha=0.7, color='royalblue', width=x_span[1]-x_span[0])
+        plt.hlines(Q_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, 
+                  label=f'Initial Q: {Q_init:.6f} m³/s')
+        plt.hlines(mean_vol_flow, 0, np.max(x_span), color='navy', linestyle='-', linewidth=2,
+                  label=f'Mean Q: {mean_vol_flow:.6f} m³/s ({vol_flow_error:.2f}%)')
+        plt.xlabel('Position x [m]')
+        plt.ylabel('Volumetric flow rate [m³/s]')
+        plt.title('Volumetric Flow Rate Conservation')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        if save:
+            plt.savefig('Pictures/CH5_valid_test/turbulent/volumetric_flow_conservation.pdf', dpi=300)
+        
+        # Mass flow rate
+        plt.figure(figsize=(10, 6))
+        plt.bar(filtered_x_span, mass_flow_rates, alpha=0.7, color='seagreen', width=x_span[1]-x_span[0])
+        plt.hlines(mass_flow_init, 0, np.max(x_span), color='red', linestyle='--', linewidth=2,
+                  label=f'Initial mass flow: {mass_flow_init:.6f} kg/s')
+        plt.hlines(mean_mass_flow, 0, np.max(x_span), color='darkgreen', linestyle='-', linewidth=2,
+                  label=f'Mean mass flow: {mean_mass_flow:.6f} kg/s ({mass_flow_error:.2f}%)')
+        plt.xlabel('Position x [m]')
+        plt.ylabel('Mass flow rate [kg/s]')
+        plt.title('Mass Flow Rate Conservation')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        if save:
+            plt.savefig('Pictures/CH5_valid_test/turbulent/mass_flow_conservation.pdf', dpi=300)
+        
+        # Flow rate variation along x
+        plt.figure(figsize=(10, 6))
+        plt.plot(filtered_x_span, vol_flow_rates/Q_init, 'o-', color='royalblue', label='Volumetric flow ratio')
+        plt.plot(filtered_x_span, mass_flow_rates/mass_flow_init, 'o-', color='seagreen', label='Mass flow ratio')
+        plt.hlines(1.0, 0, np.max(x_span), color='red', linestyle='--', linewidth=2, label='Reference (ideal)')
+        plt.xlabel('Position x [m]')
+        plt.ylabel('Flow rate ratio (measured/initial)')
+        plt.title('Flow Rate Conservation Along Stream')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        if save:
+            plt.savefig('Pictures/CH5_valid_test/turbulent/flow_conservation_ratio.pdf', dpi=300)
+        
+        plt.show()
     
-    return integrals, filtered_integrals
+    return vol_flow_rates, mass_flow_rates
 
 
 def center_line(x_span, u_all, save=False):

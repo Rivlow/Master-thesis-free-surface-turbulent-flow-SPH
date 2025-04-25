@@ -4,6 +4,7 @@ import shutil
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import random
 
 #---------------------------------#
 #   General functional function   #
@@ -275,7 +276,7 @@ def create_horiz_channel(Lx, Ly, Lz, diameter, x_start, y_start):
 
 
 #---------------------------------#
-#    Functions: Free surface 0    #
+#    Functions: Free surface      #
 #---------------------------------#
 
 # Parabola function
@@ -321,3 +322,321 @@ def calculate_scene_bounds(rigid_bodies, margin=0.01):
     max_z += margin
     
     return [min_x, min_y, min_z], [max_x, max_y, max_z]
+
+#-----------------------------------------#
+#      Functions: Full init/ Bridge       #
+#-----------------------------------------#
+
+def isFluvial(fluv):
+    if fluv:
+        return 0.5
+    else:
+        return 1.5
+    
+def create_bridge(RigidBodies,
+                  Lx_dom, Ly_dom, Lz_dom,
+                  Lx_roof, Ly_roof, Lz_roof, trans_roof,
+                  Lx_foot, Ly_foot, Lz_foot, trans_left_foot, trans_mid_foot, trans_right_foot):
+     
+
+	Domain = {
+		"id": 0,
+		"geometryFile": "../models/UnitBox.obj",
+		"translation": [Lx_dom/2, 4*Ly_dom/2, 0],
+		"scale": [Lx_dom, 4*Ly_dom, Lz_dom],
+		"rotationAxis": [1, 0, 0],
+		"rotationAngle": 0,
+		"collisionObjectType": 2,
+		"collisionObjectScale": [Lx_dom, 4*Ly_dom, Lz_dom],
+		"color": [0.1, 0.4, 0.6, 1.0],
+		"isDynamic": False,
+		"isWall": True,
+		"mapInvert": True,
+		"invertSDF": True,
+		"mapThickness": 0.0,
+		"mapResolution": [40, 40, 40],
+		"samplingMode": 1,
+		"friction": 0
+	}
+      
+	Bridge_foot_left = {
+		"id": 2,
+		"geometryFile": "../models/UnitBox.obj",
+		"translation": trans_left_foot,
+		"scale": [Lx_foot, Ly_foot, Lz_foot],
+		"rotationAxis": [1, 0, 0],
+		"rotationAngle": 0,
+		"collisionObjectType": 2,
+		"collisionObjectScale": [Lx_foot, Ly_foot, Lz_foot],
+		"color": [0.1, 0.4, 0.6, 1.0],
+		"isDynamic": False,
+		"isWall": False,
+		"mapInvert": False,
+		"invertSDF": False,
+		"mapThickness": 0.0,
+		"mapResolution": [40, 40, 40],
+		"samplingMode": 1,
+		"friction": 0
+	}
+
+	Bridge_foot_mid = {
+		"id": 3,
+		"geometryFile": "../models/UnitBox.obj",
+		"translation": trans_mid_foot,
+		"scale": [Lx_foot, Ly_foot, Lz_foot],
+		"rotationAxis": [1, 0, 0],
+		"rotationAngle": 0,
+		"collisionObjectType": 2,
+		"collisionObjectScale": [Lx_foot, Ly_foot, Lz_foot],
+		"color": [0.1, 0.4, 0.6, 1.0],
+		"isDynamic": False,
+		"isWall": False,
+		"mapInvert": False,
+		"invertSDF": False,
+		"mapThickness": 0.0,
+		"mapResolution": [40, 40, 40],
+		"samplingMode": 1,
+		"friction": 0
+	}
+	Bridge_foot_right = {
+		"id": 4,
+		"geometryFile": "../models/UnitBox.obj",
+		"translation": trans_right_foot,
+		"scale": [Lx_foot, Ly_foot, Lz_foot],
+		"rotationAxis": [1, 0, 0],
+		"rotationAngle": 0,
+		"collisionObjectType": 2,
+		"collisionObjectScale": [Lx_foot, Ly_foot, Lz_foot],
+		"color": [0.1, 0.4, 0.6, 1.0],
+		"isDynamic": False,
+		"isWall": False,
+		"mapInvert": False,
+		"invertSDF": False,
+		"mapThickness": 0.0,
+		"mapResolution": [40, 40, 40],
+		"samplingMode": 1,
+		"friction": 0
+	}
+      
+	Bridge_roof = {
+		"id": 1,
+		"geometryFile": "../models/UnitBox.obj",
+		"translation": trans_roof,
+		"scale": [Lx_roof, Ly_roof, Lz_roof],
+		"rotationAxis": [1, 0, 0],
+		"rotationAngle": 0,
+		"collisionObjectType": 2,
+		"collisionObjectScale": [Lx_roof, Ly_roof, Lz_roof],
+		"color": [0.1, 0.4, 0.6, 1.0],
+		"isDynamic": False,
+		"isWall": False,
+		"mapInvert": False,
+		"invertSDF": False,
+		"mapThickness": 0.0,
+		"mapResolution": [60, 60, 60],
+		"samplingMode": 1,
+		"friction": 0
+	}
+     
+	RigidBodies.append(Domain)
+	RigidBodies.append(Bridge_roof)
+	RigidBodies.append(Bridge_foot_left)
+	RigidBodies.append(Bridge_foot_mid)
+	RigidBodies.append(Bridge_foot_right)
+	
+	return RigidBodies
+
+def create_wood_distribution(RigidBodies, wood_distribution, next_id,
+                             Lx_emit, Ly_emit, Lz_emit, trans_emit,
+							 wood_density, restitution, friction,
+							 placement_area_x_min, placement_area_x_max,
+							 placement_area_z_min, placement_area_z_max,
+							 placement_area_y,):
+     
+	
+	placed_cylinders = []
+	cylinders_placed = 0
+	cylinders_skipped = 0
+	
+
+	for wood_type in wood_distribution:
+		for i in range(wood_type["count"]):
+
+			cylinder_length = wood_type["L"]
+			cylinder_diameter = wood_type["D"]
+			
+			# Trouver une position valide pour ce cylindre
+			result = generate_valid_position(
+				placed_cylinders,
+				cylinder_length,
+				cylinder_diameter,
+				[placement_area_x_min, placement_area_x_max],
+				[placement_area_z_min, placement_area_z_max],
+				placement_area_y,
+				Lx_emit, Ly_emit, Lz_emit,
+                trans_emit)
+				
+			
+			# Si aucune position valide n'a été trouvée après max_tries
+			if result is None:
+				cylinders_skipped += 1
+				continue
+			
+			position, rotation_axis, rotation_angle = result
+			
+			# Création de l'objet cylindre
+			cylinder = {
+				"id": next_id,
+				"geometryFile": "../models/cylinder.obj",
+				"translation": position,
+				"scale": [cylinder_diameter/2, cylinder_length, cylinder_diameter/2],
+				"rotationAxis": rotation_axis,
+				"rotationAngle": rotation_angle,
+				"collisionObjectType": 3,
+				"collisionObjectScale": [cylinder_diameter/2, cylinder_length, cylinder_diameter/2],
+				"color": [0.3, 0.5, 0.8, 1.0],
+				"isDynamic": True,
+				"density": wood_density,
+				"velocity": [0, 0, 0],
+				"restitution": restitution,
+				"friction": friction,
+				"mapInvert": False,
+				"mapThickness": 0.0,
+				"mapResolution": [60, 60, 60],
+				"resolutionSDF": [60, 60, 60]
+			}
+			
+			# Enregistrer ce cylindre pour les vérifications futures
+			placed_cylinders.append({
+				'pos': position,
+				'dim': [cylinder_diameter/2, cylinder_length, cylinder_diameter/2],
+				'axis': rotation_axis,
+				'angle': rotation_angle
+			})
+			
+			# Ajouter le cylindre à la liste des corps rigides
+			RigidBodies.append(cylinder)
+			next_id += 1
+			cylinders_placed += 1
+
+	print(f"Cylindres placés: {cylinders_placed}, Cylindres ignorés: {cylinders_skipped}")
+	return RigidBodies
+
+    
+    
+
+    
+# Fonction pour vérifier si deux cylindres se chevauchent
+def cylinders_overlap(pos1, dim1, axis1, angle1, pos2, dim2, axis2, angle2):
+	"""
+	Vérifie si deux cylindres se chevauchent en utilisant une approximation de boîte englobante.
+	
+	Args:
+		pos1, pos2: positions [x, y, z] des centres des cylindres
+		dim1, dim2: dimensions [rayon, longueur, rayon] des cylindres
+		axis1, axis2: axes de rotation des cylindres
+		angle1, angle2: angles de rotation des cylindres
+	
+	Returns:
+		bool: True si les cylindres se chevauchent, False sinon
+	"""
+	# Calcul de la distance minimale entre les centres pour éviter le chevauchement
+	min_dist_x = (dim1[1] + dim2[1]) / 2 * 1.1  # 10% de marge de sécurité en longueur
+	min_dist_y = (dim1[0]*2 + dim2[0]*2) / 2 * 1.1  # 10% de marge en hauteur (diamètre)
+	min_dist_z = (dim1[2]*2 + dim2[2]*2) / 2 * 1.1  # 10% de marge en largeur (diamètre)
+	
+	# Calcul de la distance réelle entre les centres
+	dx = abs(pos1[0] - pos2[0])
+	dy = abs(pos1[1] - pos2[1])
+	dz = abs(pos1[2] - pos2[2])
+	
+	# Vérifier si les cylindres se chevauchent
+	return dx < min_dist_x and dy < min_dist_y and dz < min_dist_z
+
+# Fonction pour vérifier si un cylindre est en collision avec l'émetteur
+def cylinder_collides_with_emitter(position, dimensions, trans_emit, Lx_emit,Ly_emit,Lz_emit):
+	"""
+	Vérifie si un cylindre est en collision avec l'émetteur.
+	
+	Args:
+		position: position [x, y, z] du centre du cylindre
+		dimensions: dimensions [rayon, longueur, rayon] du cylindre
+	
+	Returns:
+		bool: True si le cylindre est en collision avec l'émetteur
+	"""
+	# Position et dimensions de l'émetteur
+	emitter_position = trans_emit
+	emitter_width = Lz_emit
+	emitter_height = Ly_emit
+	emitter_thickness = Lx_emit
+	
+	# Boîte englobante de l'émetteur (avec marge de sécurité)
+	emitter_min_x = emitter_position[0] - emitter_thickness/2 - 0.3  # Marge de sécurité de 30cm
+	emitter_max_x = emitter_position[0] + emitter_thickness/2 + 0.3
+	emitter_min_y = emitter_position[1] - emitter_height/2 - 0.3
+	emitter_max_y = emitter_position[1] + emitter_height/2 + 0.3
+	emitter_min_z = emitter_position[2] - emitter_width/2 - 0.3
+	emitter_max_z = emitter_position[2] + emitter_width/2 + 0.3
+	
+	# Dimensions effectives du cylindre (longueur dans l'axe X)
+	cylinder_half_length = dimensions[1] / 2
+	cylinder_radius = dimensions[0]
+	
+	# Vérifier la collision dans chaque dimension
+	# En X: distance entre le centre du cylindre et l'émetteur < demi-longueur du cylindre
+	x_collision = (position[0] - cylinder_half_length < emitter_max_x) and (position[0] + cylinder_half_length > emitter_min_x)
+	# En Y: distance entre le centre du cylindre et l'émetteur < rayon du cylindre
+	y_collision = (position[1] - cylinder_radius < emitter_max_y) and (position[1] + cylinder_radius > emitter_min_y)
+	# En Z: distance entre le centre du cylindre et l'émetteur < rayon du cylindre
+	z_collision = (position[2] - cylinder_radius < emitter_max_z) and (position[2] + cylinder_radius > emitter_min_z)
+	
+	return x_collision and y_collision and z_collision
+
+# Fonction pour générer une position valide pour un nouveau cylindre
+def generate_valid_position(placed_cylinders, cylinder_length, cylinder_diameter, x_range, z_range, y_pos, Lx_emit,Ly_emit,Lz_emit, trans_emit):
+	"""
+	Génère une position valide pour un nouveau cylindre qui ne chevauche aucun cylindre existant
+	ni l'émetteur.
+	
+	Args:
+		placed_cylinders: liste des cylindres déjà placés (position, dimension, rotation)
+		cylinder_length, cylinder_diameter: dimensions du nouveau cylindre
+		x_range, z_range: plages pour les coordonnées x et z
+		y_pos: position de base en y
+	
+	Returns:
+		tuple: (position, axis, angle) ou None si aucune position valide n'est trouvée après max_tries
+	"""
+	max_tries = 100
+	rotation_axis = [0, 0, 1]  # Tous les cylindres orientés dans le sens de l'écoulement
+	rotation_angle = np.pi/2
+	
+	dimension = [cylinder_diameter/2, cylinder_length, cylinder_diameter/2]  # [rayon, longueur, rayon]
+	
+	for _ in range(max_tries):
+		# Générer une position aléatoire
+		pos_x = random.uniform(x_range[0], x_range[1])
+		pos_z = random.uniform(z_range[0], z_range[1])
+		pos_y = y_pos + random.uniform(-0.05, 0.05)  # Légère variation en hauteur
+		
+		position = [pos_x, pos_y, pos_z]
+		
+		# Vérifier collision avec l'émetteur
+		if cylinder_collides_with_emitter(position, dimension, trans_emit, Lx_emit,Ly_emit,Lz_emit):
+			continue
+		
+		# Vérifier s'il y a chevauchement avec des cylindres existants
+		overlap = False
+		for cyl in placed_cylinders:
+			if cylinders_overlap(position, dimension, rotation_axis, rotation_angle, 
+								cyl['pos'], cyl['dim'], cyl['axis'], cyl['angle']):
+				overlap = True
+				break
+		
+		# Si pas de chevauchement, retourner la position valide
+		if not overlap:
+			return position, rotation_axis, rotation_angle
+	
+	# Si aucune position valide n'est trouvée après max_tries
+	return None

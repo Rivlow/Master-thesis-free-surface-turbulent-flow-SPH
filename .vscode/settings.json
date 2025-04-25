@@ -1,0 +1,9 @@
+{
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": false,  // true si vous préférez les espaces
+    "editor.tabSize": 4,
+    "[python]": {
+    "editor.insertSpaces": false,  // ou true pour les espaces
+    "editor.tabSize": 4
+    }
+}
