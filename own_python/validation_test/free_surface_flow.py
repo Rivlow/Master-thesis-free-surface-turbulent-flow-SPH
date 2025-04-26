@@ -255,7 +255,7 @@ def compute_theoretical_water_height(U_0):
     # Parabola function (bed profile)
     z_b = lambda x: 0.2 - 0.05*((x-10)**2) if 8 <= x <= 12 else 0
 
-    D = 0.46 * m
+    D = (0.495 - 0.015) * m
     
 
     # Boundary conditions

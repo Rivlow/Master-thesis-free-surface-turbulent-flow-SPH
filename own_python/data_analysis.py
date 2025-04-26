@@ -103,8 +103,6 @@ def main():
 	points, h_sph, u_sph = extract_water_height(steady_vtk[-1], plot=False, save=False)
 
 	x_th, z_th, h_th, Fr_th = compute_theoretical_water_height(U_0)
-	points[:,0] += 4
-	h_sph[:,0] += 4
 
 	points[:,1] += 0.015
 	h_sph[:,1] += 0.015
@@ -117,7 +115,7 @@ def main():
 											remove=False, plot=False, save=False)
 
 
-	
+	'''
 	Q_init = U_0*(np.max(y_all[0]) - np.min(y_all[0]))
 	x_span = np.linspace(0, 25, len(u_all))
 	integrate_slice(Q_init, 1000, x_span, u_all, y_all, rho_all, save=False)
@@ -132,7 +130,7 @@ def main():
 	print(f'True outlet velocity (h_out = 0.33 [m]) = {Q_v/0.33} [m/s]\n')
 	print(f'Pseudo volumic flow rate (inlet)= {U_0*emit_H} [m^2/s]')
 	print(f'Pseudo outlet velocity (h_out = 0.33 [m]) = {U_0*emit_H/0.33} [m/s]')
-
+	'''	
 
 	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False)
 

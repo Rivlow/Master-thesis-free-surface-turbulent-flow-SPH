@@ -270,7 +270,7 @@ def main():
 				"rotationAngle": 0.0,
 				"scale": scale_anim,
 				"shapeType": 0,
-				"expression_x": f"{U_0}*y/0.33",
+				"expression_x": f"{Q_init}/0.33",
 				"expression_y": "",
 				"expression_z": ""
 			}
