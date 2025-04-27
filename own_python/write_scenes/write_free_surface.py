@@ -13,13 +13,12 @@ def main():
 	#	SIMULATION PARAMETERS	#
 	#-----------------------------#
 	
-	r = 0.01/2		 # Particle radius
-	particle = 2*r
+	r = 0.01		 # Particle radius
 	particle = 2*r
 	U_0 = 0.36				   # Initial velocity
-	t_end = 200				 # Simulation end time
+	t_end = 400				 # Simulation end time
 	timeStepSize = 0.001		# Time step size
-	FPS = 10					# Frames per second for export
+	FPS = 5					# Frames per second for export
 	clean_output = True		 # Clean output directory
 	g = 9.81
 	
@@ -29,7 +28,7 @@ def main():
 	mapInvert = False		   # Domain is outside the unit box
 	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density"  # Exported attributes
 	
-	xsph_fluid = 0.07		   # XSPH for fluid
+	xsph_fluid = 0.035		   # XSPH for fluid
 	xsph_boundary = 0.0		 # XSPH for boundaries
 	viscosity_boundary = 0.00	# Boundary viscosity
 	
@@ -71,7 +70,7 @@ def main():
 	
 	# Add boundary just before emitter
 	
-	trans_emit = [-emit_L/2, emit_H/2 + 2*r, 0]
+	trans_emit = [-emit_L/2 + particle, emit_H/2 + particle, 0]
 	trans_ground_1 = [Lx_1/2, -Ly/2, 0]
 	trans_ground_2 = [parabola_end + Lx_2/2, -Ly/2, 0]
 
@@ -83,6 +82,21 @@ def main():
 
 	
 	RigidBodies = [
+		#  Just before emitter 
+		{
+			"geometryFile": "../models/UnitBox.obj",
+			"translation": [-emit_L, 2*emit_H/2 + particle, 0],
+			"rotationAxis": [1, 0, 0],
+			"rotationAngle": 0,
+			"scale": [3*emit_L, 2*emit_H, Lz],
+			"color": [0.1, 0.4, 0.6, 1.0], 
+			"isDynamic": False,
+			"isWall": False,
+			"mapInvert": mapInvert,
+			"mapThickness": 0.0,
+			"mapResolution": [40, 40, 10],
+			"samplingMode": 1
+		},
 		# First rectangle (left flat section)
 		{
 			"geometryFile": "../models/UnitBox.obj",
@@ -112,24 +126,9 @@ def main():
 			"mapThickness": 0.0,
 			"mapResolution": [40, 40, 10],
 			"samplingMode": 1
-		},
+		}
 	]
 	
-	"""#  Just before emitter 
-		{
-			"geometryFile": "../models/UnitBox.obj",
-			"translation": [-3*emit_L/2 - particle, 2*emit_H/2 + 2*r, 0],
-			"rotationAxis": [1, 0, 0],
-			"rotationAngle": 0,
-			"scale": [3*emit_L, 2*emit_H, Lz],
-			"color": [0.1, 0.4, 0.6, 1.0], 
-			"isDynamic": False,
-			"isWall": False,
-			"mapInvert": mapInvert,
-			"mapThickness": 0.0,
-			"mapResolution": [40, 40, 10],
-			"samplingMode": 1
-		}"""
 	
 	
 	x = np.linspace(parabola_start, parabola_end, nb_elem+1)
@@ -247,7 +246,7 @@ def main():
 				"emitterBoxMax": [x_max,y_max, z_max]
 			}
 		],
-		
+
 		"Emitters": [
 			{
 				"width": emitter_config["width"],

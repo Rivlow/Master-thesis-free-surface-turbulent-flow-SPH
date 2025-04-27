@@ -240,7 +240,7 @@ def extract_water_height(vtk_file, plot=False, save=False):
     return pos, h, u_surf
 
 
-def compute_theoretical_water_height(U_0):
+def compute_theoretical_water_height(Q_init):
     """
     Calculate the theoretical water height.
 
@@ -254,12 +254,10 @@ def compute_theoretical_water_height(U_0):
 
     # Parabola function (bed profile)
     z_b = lambda x: 0.2 - 0.05*((x-10)**2) if 8 <= x <= 12 else 0
-
-    D = (0.495 - 0.015) * m
     
 
     # Boundary conditions
-    q = U_0*D * (m**2/s)          # inlet mass flow
+    q = Q_init *(m**2/s)          # inlet mass flow
     h_aval = 33 * cm             # outlet water height
 
     # Compute critical height
@@ -399,7 +397,7 @@ def main():
     U_0 = 0.36 * (m/s)
 
     # Calculate theoretical water heights
-    x_all, z_all, h_all, Fr_all = compute_theoretical_water_height(U_0)
+    x_all, z_all, h_all, Fr_all = compute_theoretical_water_height(U_0*0.5)
 
     # Create plot
     fig, ax1 = plt.subplots(figsize=(10, 6))
