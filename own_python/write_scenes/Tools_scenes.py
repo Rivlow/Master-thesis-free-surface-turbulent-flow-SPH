@@ -337,27 +337,6 @@ def create_bridge(RigidBodies,
                   Lx_dom, Ly_dom, Lz_dom,
                   Lx_roof, Ly_roof, Lz_roof, trans_roof,
                   Lx_foot, Ly_foot, Lz_foot, trans_left_foot, trans_mid_foot, trans_right_foot):
-     
-
-	Domain = {
-		"id": 0,
-		"geometryFile": "../models/UnitBox.obj",
-		"translation": [Lx_dom/2, 4*Ly_dom/2, 0],
-		"scale": [Lx_dom, 4*Ly_dom, Lz_dom],
-		"rotationAxis": [1, 0, 0],
-		"rotationAngle": 0,
-		"collisionObjectType": 2,
-		"collisionObjectScale": [Lx_dom, 4*Ly_dom, Lz_dom],
-		"color": [0.1, 0.4, 0.6, 1.0],
-		"isDynamic": False,
-		"isWall": True,
-		"mapInvert": True,
-		"invertSDF": True,
-		"mapThickness": 0.0,
-		"mapResolution": [40, 40, 40],
-		"samplingMode": 1,
-		"friction": 0
-	}
       
 	Bridge_foot_left = {
 		"id": 2,
@@ -438,7 +417,6 @@ def create_bridge(RigidBodies,
 		"friction": 0
 	}
      
-	RigidBodies.append(Domain)
 	RigidBodies.append(Bridge_roof)
 	RigidBodies.append(Bridge_foot_left)
 	RigidBodies.append(Bridge_foot_mid)
@@ -608,7 +586,7 @@ def generate_valid_position(placed_cylinders, cylinder_length, cylinder_diameter
 	Returns:
 		tuple: (position, axis, angle) ou None si aucune position valide n'est trouvée après max_tries
 	"""
-	max_tries = 100
+	max_tries = 5000
 	rotation_axis = [0, 0, 1]  # Tous les cylindres orientés dans le sens de l'écoulement
 	rotation_angle = np.pi/2
 	

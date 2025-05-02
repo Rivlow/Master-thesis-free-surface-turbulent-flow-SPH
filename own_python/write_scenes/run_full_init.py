@@ -8,6 +8,7 @@ sys.path.append((os.getcwd()))
 from own_python.write_scenes.Tools_scenes import *
 
 m = 1
+mm = 1e-3*m
 s = 1
 
 
@@ -54,8 +55,8 @@ def main():
 	viscosity_boundary = 1  # Boundary viscosity
 
 	#----XSPH----#
-	xsph_fluid = 0.07
-	xsph_boundary = 0.0
+	xsph_fluid = 0.2
+	xsph_boundary = 0.01
 
 	#----Vorticity----
 	vorticityMethod = 1        # Micropolar model
@@ -67,12 +68,16 @@ def main():
 	boundaryHandlingMethod = 2 # Volume maps
 	elasticityMethod = 0       # No elasticity
 	dragMethod = 2             # Gissler et al. 2017
-	drag = 0.4                 # Drag coefficient
+	drag = 0.07                # Drag coefficient
 
 	#----PBD---#
 	clothSimulationMethod = 0 # None
-	restitution = 0.2
-	friction = 0.7
+	restitution = 0.0
+	friction = 0.9
+	contactTolerance = 2*particle
+	contactStiffnessRigidBody = 1e-3
+	contactStiffnessParticleRigidBody = 1e-3
+	
 
 	# Export settings
 	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density"
@@ -94,9 +99,12 @@ def main():
 	Lx_obs = Ly_obs            # Length of obstruction
 
 	# Cylinder objects dimensions
+	D = 0.035/2
+	L = 0.4
 	Lx_obj = 0.05
 	Ly_obj = 2.3*0.6
 	Lz_obj = 0.05
+
 
 	# Emitter configuration
 	Lx_emit = particle
@@ -111,16 +119,17 @@ def main():
 
 	#----Fluid blocks positions----#
 	# (Before obstacles)
+	water_height = Ly_dom
 	fluid_1_min = [Lx_anim, 0, -Lz_dom/2 + particle]
-	fluid_1_max = [Lx_dom/2 - Lx_obs/2 - particle, Ly_dom, Lz_dom/2 - particle]
+	fluid_1_max = [Lx_dom/2 - Lx_obs/2 - particle, water_height, Lz_dom/2 - particle]
 
 	# (Between obstacles)
 	fluid_2_min = [Lx_dom/2 - Lx_obs/2 - particle, 0, -Lz_dom/2 + Lz_obs + particle]
-	fluid_2_max = [Lx_dom/2 + Lx_obs/2, Ly_dom, Lz_dom/2 - Lz_obs - particle]
+	fluid_2_max = [Lx_dom/2 + Lx_obs/2, water_height, Lz_dom/2 - Lz_obs - particle]
 
 	# (After obstacles)
 	fluid_3_min = [Lx_dom/2 + Lx_obs/2 + particle, 0, -Lz_dom/2 + particle]
-	fluid_3_max = [0.7*Lx_dom - particle, Ly_dom, Lz_dom/2 - particle]
+	fluid_3_max = [0.7*Lx_dom - particle, water_height, Lz_dom/2 - particle]
 
 	#----Translation vectors----#
 	trans_obs_left = [Lx_dom/2, 3*Ly_dom/2, -Lz_dom/2 + Lz_obs/2]
@@ -209,7 +218,7 @@ def main():
 			"geometryFile": "../models/cylinder.obj",
 			"translation": trans_obj_1,
 			"scale": [Lx_obj, Ly_obj, Lz_obj],
-			"rotationAxis": [1, 0, 0],
+			"rotationAxis": [1, 1, 0],
 			"rotationAngle": np.pi/2,
 			"collisionObjectType": 3,
 			"collisionObjectScale": [Lx_obj, Ly_obj, Lz_obj],
@@ -229,7 +238,7 @@ def main():
 			"geometryFile": "../models/cylinder.obj",
 			"translation": trans_obj_2,
 			"scale": [Lx_obj, Ly_obj, Lz_obj],
-			"rotationAxis": [1, 0, 0],
+			"rotationAxis": [1, 1, 0],
 			"rotationAngle": np.pi/2,
 			"collisionObjectType": 3,
 			"collisionObjectScale": [Lx_obj, Ly_obj, Lz_obj],
@@ -243,12 +252,33 @@ def main():
 			"mapThickness": 0.0,
 			"mapResolution": [40, 40, 40]
 		},
+		# Thrid cylinder object
 		{
 			"id": 5,
 			"geometryFile": "../models/cylinder.obj",
 			"translation": trans_obj_3,
 			"scale": [Lx_obj, Ly_obj, Lz_obj],
-			"rotationAxis": [1, 0, 0],
+			"rotationAxis": [1, 1, 0],
+			"rotationAngle": np.pi/2,
+			"collisionObjectType": 3,
+			"collisionObjectScale": [Lx_obj, Ly_obj, Lz_obj],
+			"color": [0.2, 0.6, 0.4, 1.0],
+			"isDynamic": True,
+			"density": 400,
+			"velocity": [0, 0, 0],
+			"restitution": restitution,
+			"friction": friction,
+			"mapInvert": False,
+			"mapThickness": 0.0,
+			"mapResolution": [40, 40, 40]
+		},
+		# Fourth cylinder object
+		{
+			"id": 5,
+			"geometryFile": "../models/cylinder.obj",
+			"translation": trans_obj_4,
+			"scale": [Lx_obj, Ly_obj, Lz_obj],
+			"rotationAxis": [1, 1, 0],
 			"rotationAngle": np.pi/2,
 			"collisionObjectType": 3,
 			"collisionObjectScale": [Lx_obj, Ly_obj, Lz_obj],
@@ -384,14 +414,14 @@ def main():
 	# 7. Simulation parameters
 	Simulation = {
 
-		"maxIter": 25,
-		"maxIterVel": 25,
+		"maxIter": 50,
+		"maxIterVel": 50,
 		"velocityUpdateMethod": 1,
 		
 		# Contact handling
-		"contactTolerance": 0.06,
-		"contactStiffnessRigidBody": 1.0, # body-body coupling
-		"contactStiffnessParticleRigidBody": 100.0, # fluid-body coupling 
+		"contactTolerance": contactTolerance,
+		"contactStiffnessRigidBody": contactStiffnessRigidBody, # body-body coupling
+		"contactStiffnessParticleRigidBody": contactStiffnessParticleRigidBody, # fluid-body coupling 
 		
 		# Solid parameters
 		"solid_stiffness": 100.0, # rigid bodies

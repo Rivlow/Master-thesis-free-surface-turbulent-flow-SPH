@@ -29,27 +29,23 @@ from validation_test.Tools_valid import *
 
 def main():
 
-	vtk_folder="my_output/free_surface/r_001/U_036"
+	vtk_folder="my_output/local/free_surface/U_036/test"
 	#vtk_folder = "my_output/turbulent_pipe/r_004"
 	# Units
 
 	kg = 1
-	mm = 1e-3
 	m = 1
+	mm = 1e-3*m
 	s = 1
 
-	g = 9.81*(m/s**2)
-
-	U_0 = 0.30*(m/s)
-	nu = 1e-6*(m**2/s)
-	rho = 1e3*(kg/m**3)
-	r = 5*mm
+	g = 9.81 * (m/s**2)
+	U_0 = 0.36 * (m/s)
+	nu = 1e-6 * (m**2/s)
+	rho = 1e3 * (kg/m**3)
+	r = 2.5 * (mm)
 	h = 4*r
+
 	particle = 2*r
-
-
-
-
 
 	# Load vtk files
 	all_vtk = load_vtk_files(vtk_folder, print_files=False)
@@ -100,39 +96,43 @@ def main():
 	#-----------------------#
 
 	# Dimensions
-	Lx_1 = 4.5*m
-	Ly = 0.02*m
-	emit_H = 0.5
+	Lx_1 = 4.5* (m)
+	Ly = 0.02* (m)
+	Ly_emit = 0.5 * (m)
 
 	steady_vtk = all_vtk[100:]
 	points, h_sph, u_sph = extract_water_height(steady_vtk[-1], plot=False, save=False)
 	points[:,1] += 0.015
 	h_sph[:,1] += 0.015
 
-	xy_init = [16, 0]
-	xy_final = [25, emit_H]
+	xy_init = [15, 0]
+	xy_final = [24, Ly_emit]
 	attributes = ['velocity', 'density', 'p_/_rho^2']
 	dimensions = {"velocity": r"[m/s]",
 				  "density": r"[kg/$m^3$]",
 				  "p_/_rho^2": r"[Pa]",
 				  "temperature": r"[K]",
 				  "viscosity": r"[Pa·s]"}
-
-	multiple_data = multiple_slices_2D(steady_vtk[-1], attributes, dimensions, "free_surface",
+	
+	multiple_data = multiple_slices_2D(steady_vtk[-1], attributes, dimensions, "free_surface_",
 									   xy_init, xy_final,
-									   num_slices=50, slice_width=2*particle,
-									   remove=False, plot=True, save=False)
+									   num_slices=50, slice_width= 4*particle,
+									   remove=False, plot=True, save=True)
+	
+	
+	checkHydrostatic(multiple_data)
 
-
-	integrate_slice(multiple_data,
-					xy_init[0], xy_final[1],
-					Q_init=0.18, rho_0=1000,
-					save=False)
-
-	x_th, z_th, h_th, Fr_th = compute_theoretical_water_height(0.18)
+	xy_init = [0, 0]
+	xy_final = [24, Ly_emit]
+	Q_init_num = integrate_slice(multiple_data,
+								 xy_init[0], xy_final[0],
+								 Q_init=0.18, rho_0=1000,
+								 plot=True,
+								 save=True)
 	
 
-	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False)
+	x_th, z_th, h_th, Fr_th = compute_theoretical_water_height(Q_init_num)
+	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=True)
 	
 
 	plt.show()
