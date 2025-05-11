@@ -5,5 +5,16 @@
     "[python]": {
     "editor.insertSpaces": false,  // ou true pour les espaces
     "editor.tabSize": 4
-    }
+	},
+	"files.associations": {
+		"sampleDict": "cpp",
+		"controlDict": "cpp",
+		"blockMeshDict": "cpp",
+		"deque": "cpp",
+		"forward_list": "cpp",
+		"list": "cpp",
+		"string": "cpp",
+		"vector": "cpp",
+		"valarray": "cpp"
+	}
 }

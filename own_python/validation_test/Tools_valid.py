@@ -2,6 +2,8 @@ import numpy as np
 from shapely.geometry import Point, LineString, box
 from shapely.ops import nearest_points
 import matplotlib.pyplot as plt
+import pyvista as pv
+
 
 def configure_latex():
 	"""Configure matplotlib to use LaTeX for rendering text."""
@@ -9,114 +11,342 @@ def configure_latex():
 	plt.rc('font', family='serif')
 
 
-def find_particles_in_rectangle(points, x_min, y_min, x_max, y_max):
-	"""
-	Find particles within a rectangular region.
+
+def project_line(points, 
+				 plane, axis, fixed_coord, 
+				 bounds=None, thickness=None):
 	
-	Args:
-		points (array): Array of particle positions
-		x_min, y_min (float): Lower-left corner coordinates
-		x_max, y_max (float): Upper-right corner coordinates
+	axis_dict = {'x': 0, 'y': 1, 'z': 2}
+	plane_axes = [axis for axis in plane]
+	plane_indices = [axis_dict[axis] for axis in plane_axes]
+	
+	# Get projected axis and other axis
+	proj_idx = axis_dict[axis]
+	other_axis = plane.replace(axis, '')
+	other_idx = axis_dict[other_axis]
+	
+	# If bounds is none, take whole domain
+	if bounds is None:
+		min_pos = np.min(points[:, plane_indices], axis=0)
+		max_pos = np.max(points[:, plane_indices], axis=0)
+
+		bounds = (min_pos[0], min_pos[1], max_pos[0], max_pos[1])
+	
+	# Appply first mask (2D -> 2D)
+	bounds_mask = np.ones(len(points), dtype=bool)
+	
+	if plane == 'xy':
+		xmin, ymin, xmax, ymax = bounds
+		bounds_mask &= (points[:, 0] >= xmin) & (points[:, 0] <= xmax)
+		bounds_mask &= (points[:, 1] >= ymin) & (points[:, 1] <= ymax)
+	elif plane == 'xz':
+		xmin, zmin, xmax, zmax = bounds
+		bounds_mask &= (points[:, 0] >= xmin) & (points[:, 0] <= xmax)
+		bounds_mask &= (points[:, 2] >= zmin) & (points[:, 2] <= zmax)
+	elif plane == 'yz':
+		ymin, zmin, ymax, zmax = bounds
+		bounds_mask &= (points[:, 1] >= ymin) & (points[:, 1] <= ymax)
+		bounds_mask &= (points[:, 2] >= zmin) & (points[:, 2] <= zmax)
+	
+	filtered_points = points[bounds_mask]
+	
+	# Apply second mask (2D -> 1D)
+	line_mask = np.abs(filtered_points[:, proj_idx] - fixed_coord) <= thickness
+	
+	projected_points = filtered_points.copy()
+	projected_points[:, proj_idx] = fixed_coord
+	
+	# Trouver les indices originaux des points sélectionnés
+	final_mask = np.zeros(len(points), dtype=bool)
+	filtered_indices = np.where(bounds_mask)[0]
+	line_indices = filtered_indices[line_mask]
+	final_mask[line_indices] = True
+
+	# Sort points along desired axis
+	sort_indices = np.argsort(projected_points[line_mask][:, other_idx])
+	sorted_points = projected_points[line_mask][sort_indices]
+	
+	sorted_indices = line_indices[sort_indices]
+	sorted_mask = np.zeros(len(points), dtype=bool)
+	sorted_mask[sorted_indices] = True
+	
+	return sorted_points, sorted_mask
+
+
+def project_surface(points, 
+					axis, fixed_coord, 
+					bounds, thickness):
+	
+	axis_dict = {'x': 0, 'y': 1, 'z': 2}
+	
+	# If bounds is none, take whole domain
+	if bounds is None:
+		min_pos = np.min(points, axis=0)
+		max_pos = np.max(points, axis=0)
+		xmin, ymin, zmin = min_pos
+		xmax, ymax, zmax = max_pos
+	else:
+		xmin, ymin, zmin, xmax, ymax, zmax = bounds
+
+	# Apply first mask (3D -> 3D)
+	bounds_mask = np.ones(len(points), dtype=bool)
+	bounds_mask &= (points[:, 0] >= xmin) & (points[:, 0] <= xmax)
+	bounds_mask &= (points[:, 1] >= ymin) & (points[:, 1] <= ymax)
+	bounds_mask &= (points[:, 2] >= zmin) & (points[:, 2] <= zmax)
+	filtered_points = points[bounds_mask]
+	
+	# Apply second mask (3D -> 2D)
+	plane_mask = np.abs(filtered_points[:, axis_dict[axis]] - fixed_coord) <= thickness
+	
+	projected_points = filtered_points.copy()
+	projected_points[:, axis_dict[axis]] = fixed_coord
+	
+	final_mask = np.zeros(len(points), dtype=bool)
+	filtered_indices = np.where(bounds_mask)[0]
+	plane_indices = filtered_indices[plane_mask]
+	final_mask[plane_indices] = True
+	
+	return projected_points[plane_mask], final_mask
+
+
+def get_single_slice(vtk_files, attribute, plane, axis, fixed_coord=None, thickness=0.1, component=None):
+
+	axis_dict = {'x': 0, 'y': 1, 'z': 2}
+	plane_axes = [a for a in plane]
+	target_idx = axis_dict[axis]
+	
+	# Determine perpendicular axis
+	if plane == 'xy':
+		other_axis = 'y' if axis == 'x' else 'x'
+	elif plane == 'xz':
+		other_axis = 'z' if axis == 'x' else 'x'
+	elif plane == 'yz':
+		other_axis = 'z' if axis == 'y' else 'y'
+	
+	other_axis_idx = axis_dict[other_axis]
+	min_coords = np.min(vtk_files[0].points, axis=0)
+	max_coords = np.max(vtk_files[0].points, axis=0)
+	
+	if fixed_coord is None:
+		target_min = min_coords[target_idx]
+		target_max = max_coords[target_idx]
+	else:
+		target_min = fixed_coord - thickness
+		target_max = fixed_coord + thickness
+
+	# Iterate over all vtk files
+	for vtk_file in vtk_files:
+		points = vtk_file.points
 		
-	Returns:
-		tuple: (Boolean mask of particles inside rectangle, Rectangle object)
-	"""
-	rectangle = box(x_min, y_min, x_max, y_max)
-	inside_mask = np.zeros(len(points), dtype=bool)
-	
-	for i, point in enumerate(points):
-		shapely_point = Point(point[0], point[1])
-		inside_mask[i] = rectangle.contains(shapely_point)
-	
-	return inside_mask, rectangle
-
-
-def project_particles(vtk_data, mask, rectangle):
-	"""
-	Project particles onto a vertical line in the middle of a rectangle.
-	
-	Args:
-		vtk_data: VTK data containing particle information
-		mask (array): Boolean mask indicating particles to project
-		rectangle: Shapely rectangle object
+		result = []
 		
-	Returns:
-		tuple: (Projected points, Projected attributes, Vertical line)
-	"""
-	# Particles inside the rectangle
-	points = vtk_data.points
-	inside_points = points[mask]
-	
-	min_x, min_y, max_x, max_y = rectangle.bounds
-	middle_x = (min_x + max_x) / 2
-	vertical_line = LineString([(middle_x, min_y), (middle_x, max_y)])
-	
-	# Project (orthogonally) the particles on the vertical line
-	projected_points = np.zeros_like(inside_points)
-	for i, point_coords in enumerate(inside_points):
-		shapely_point = Point(point_coords[0], point_coords[1])
-		_, projected = nearest_points(shapely_point, vertical_line)
+		# Create slice depending on plane and projected axis			
+		if plane == 'xy':
+			if axis == 'x':
+				bounds = (target_min, min_coords[1], target_max, max_coords[1])
+			else:  # axis == 'y'
+				bounds = (min_coords[0], target_min, max_coords[0], target_max)
+		elif plane == 'xz':
+			if axis == 'x':
+				bounds = (target_min, min_coords[2], target_max, max_coords[2])
+			else:  # axis == 'z'
+				bounds = (min_coords[0], target_min, max_coords[0], target_max)
+		elif plane == 'yz':
+			if axis == 'y':
+				bounds = (target_min, min_coords[2], target_max, max_coords[2])
+			else:  # axis == 'z'
+				bounds = (min_coords[1], target_min, max_coords[1], target_max)
 		
-		projected_points[i, 0] = projected.x
-		projected_points[i, 1] = projected.y
+		_, mask = project_line(
+			points=points,
+			plane=plane,
+			axis=axis,
+			fixed_coord=fixed_coord,
+			bounds=bounds,
+			thickness=thickness
+		)
 
-		# Keep the z coordinate if it exists
-		if inside_points.shape[1] > 2:
-			projected_points[i, 2] = point_coords[2] 
+		if np.any(mask):
+
+			slice_points = points[mask]
+			attr_values = vtk_file.point_data[attribute][mask]
+			time_values = vtk_file.point_data['time'][mask]
+			other_axis_coords = slice_points[:, other_axis_idx]
+
+			# Sort by increasing order for transversal axis
+			sort_idx = np.argsort(other_axis_coords)
+			other_axis_coords = other_axis_coords[sort_idx]
+			attr_values = attr_values[sort_idx]
+			
+			if component is not None and attr_values.ndim > 1:
+				attr_values = attr_values[:, component]
+			
+			result.append({
+				'position': fixed_coord,
+				'values': attr_values,
+				'time': time_values,
+				'coordinates': other_axis_coords
+			})
+
+	return result
+
+
+def get_multiple_slices(vtk_file, attribute, plane, axis, along=None, thickness=0.1, component=None):
+
+	axis_dict = {'x': 0, 'y': 1, 'z': 2}
+	plane_axes = [a for a in plane]
+	target_idx = axis_dict[axis]
 	
-	# Extract and project attributes
-	projected_attributes = {}
-	point_arrays = list(vtk_data.point_data.keys())
+	# Determine perpendicular axis
+	if plane == 'xy':
+		other_axis = 'y' if axis == 'x' else 'x'
+	elif plane == 'xz':
+		other_axis = 'z' if axis == 'x' else 'x'
+	elif plane == 'yz':
+		other_axis = 'z' if axis == 'y' else 'y'
 	
-	for key in point_arrays:
-		values = vtk_data[key]
-		projected_attributes[key] = values[mask]
+	other_axis_idx = axis_dict[other_axis]
 	
-	# Sort the projected points by y coordinate
-	if len(projected_points) > 0:
-		sort_indices = np.argsort(projected_points[:, 1])
-		projected_points = projected_points[sort_indices]
+	points = vtk_file.points
+	
+	min_coords = np.min(points, axis=0)
+	max_coords = np.max(points, axis=0)
+	
+	if along is None:
+		target_min = min_coords[target_idx]
+		target_max = max_coords[target_idx]
+	else:
+		target_min = along[0]
+		target_max = along[1]
+	
+	positions = np.arange(target_min + thickness, target_max - thickness, thickness)
+	
+	result = []
+	
+	# Create slice depending on plane and projected axis
+	for pos in positions:
 		
-		for key in projected_attributes:
-			projected_attributes[key] = projected_attributes[key][sort_indices]
+		if plane == 'xy':
+			if axis == 'x':
+				bounds = (pos - thickness, min_coords[1], pos + thickness, max_coords[1])
+			else:  # axis == 'y'
+				bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
+		elif plane == 'xz':
+			if axis == 'x':
+				bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
+			else:  # axis == 'z'
+				bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
+		elif plane == 'yz':
+			if axis == 'y':
+				bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
+			else:  # axis == 'z'
+				bounds = (min_coords[1], pos - thickness, max_coords[1], pos + thickness)
+		
+		_, mask = project_line(
+			points=points,
+			plane=plane,
+			axis=axis,
+			fixed_coord=pos,
+			bounds=bounds,
+			thickness=thickness
+		)
+		
+		if np.any(mask):
+
+			slice_points = points[mask]
+			attr_values = vtk_file.point_data[attribute][mask]
+			other_axis_coords = slice_points[:, other_axis_idx]
+
+			# Sort by increasing order for transversal axis
+			sort_idx = np.argsort(other_axis_coords)
+			other_axis_coords = other_axis_coords[sort_idx]
+			attr_values = attr_values[sort_idx]
+			
+			if component is not None and attr_values.ndim > 1:
+				attr_values = attr_values[:, component]
+			
+			result.append({
+				'position': pos,
+				'values': attr_values,
+				'coordinates': other_axis_coords
+			})
 	
-	return projected_points, projected_attributes, vertical_line
+	return result
+	
+
+def spatial_derivative(slices):
+
+	mean_vals = []
+	pos = []
+
+	for slice in slices:
+		mean_vals.append(np.mean(slice['values']))
+		pos.append(slice['position'])
+
+	mean_vals = np.array(mean_vals)
+	positions = np.array(pos)
+	
+	# Finite difference method
+	derivative = np.zeros_like(mean_vals)
+	if len(positions) > 2:
+		derivative[1:-1] = (mean_vals[2:] - mean_vals[:-2]) / (positions[2:] - positions[:-2]) # centrered inside domain
+		derivative[0] = (mean_vals[1] - mean_vals[0]) / (positions[1] - positions[0]) # forward at entrance
+		derivative[-1] = (mean_vals[-1] - mean_vals[-2]) / (positions[-1] - positions[-2]) # backward at exit
+		
+	return derivative, positions
+
+def time_derivative(slices):
+
+	mean_vals = []
+	time = []
+
+	for slice in slices:
+		mean_vals.append(np.mean(slice['values']))
+		time.append(slice['time'])
+
+	mean_vals = np.array(mean_vals)
+	times = np.array(time)
+	
+	# Forward finite difference method
+	derivative = np.zeros_like(mean_vals)
+	derivative[1:] = (mean_vals[:-1] - mean_vals[:1])/(times[:-1] - times[:1])
+		
+		
+	return derivative, times
+	
+def plot_vtk(vtk_file, mask=None, attribute='velocity'):
 
 
-def remove_part(slice_data, min_part, sort_key="density"):
-	"""
-	Remove excess particles to maintain consistent array sizes.
-	
-	Args:
-		slice_data (dict): Dictionary containing data arrays for a slice
-		min_part (int): Minimum number of particles to keep
-		sort_key (str): Key to use for sorting (default: "density")
-	
-	Returns:
-		dict: Filtered data dictionary
-	"""
-	# Sort indices based on the specified attribute
-	idx_sorted = np.argsort(slice_data[sort_key])
-	idx_kept = np.sort(idx_sorted[:min_part])
-	
-	# Apply filtering to all arrays in the dictionary
-	filtered_dict = {}
-	for key, value in slice_data.items():
-		filtered_dict[key] = value[idx_kept]
-	
-	return filtered_dict
-	
-def single_slice(vtk_data, attributes, dimensions, save_path,
+	if mask is not None:
+		points = vtk_file.points[mask]
+	else:
+		points = vtk_file.points
+
+	point_cloud = pv.PolyData(points)
+
+	if mask is not None:
+		point_cloud.point_data[attribute] = vtk_file.point_data[attribute][mask]
+	else:
+		point_cloud.point_data[attribute] = vtk_file.point_data[attribute]
+
+	plotter = pv.Plotter()
+	plotter.add_mesh(
+		point_cloud, 
+		render_points_as_spheres=True, 
+		scalar_bar_args={"title": f"{attribute}"},
+		cmap="viridis", 
+		scalars=attribute
+	)
+
+	plotter.add_axes()
+	plotter.show()
+
+'''
+def time_analysis(vtk_data, attributes, dimensions, save_path,
 						x, y_min, y_max,
 						num_slices, slice_width, 
 						remove=False, plot=False, save=False):
-	"""
-	Optimized version of single_slice function with:
-	- Vectorized operations
-	- Pre-allocation of arrays
-	- Early skipping of unnecessary operations
-	- Reduced data copying
-	"""
+	
 	x_min = x - slice_width
 	x_max = x + slice_width
 	
@@ -265,292 +495,73 @@ def single_slice(vtk_data, attributes, dimensions, save_path,
 			plt.show()
 	
 	return all_data
+'''
 
+def compute_flow_rate(Q_v_th, rho0, 
+					  u_slices, rho_slices, 
+					  plot=False, save=False, savepath=None):
 
-def multiple_slices_2D(vtk_data, attributes, dimensions, save_path,
-						xy_init, xy_final, 
-						num_slices, slice_width, 
-						remove=False, plot=False, save=False):
-	"""
-	Optimized version of multiple_slices_2D function with:
-	- Vectorized operations
-	- Pre-allocation of arrays
-	- Early skipping of unnecessary operations
-	- Reduced redundant calculations
-	"""
-	x_span = np.linspace(xy_init[0], xy_final[0], num_slices)
-	y_min = xy_init[1]
-	y_max = xy_final[1]
+	Q_v, Q_m, span = [], [], []
 
-	current_min_particles = float('inf')
+	# Integrate Q_v and Q_m along transversal axis
+	for u, rho in zip(u_slices, rho_slices):
 
-	# Pre-allocate storage arrays
-	all_data = {
-		"x_positions": x_span,
-		"y": [None] * num_slices
-	}
+		u_vals = np.asarray(u['values'])
+		rho_vals = np.asarray(rho['values'])
+		y_vals = np.asarray(u['coordinates'])
 
-	# Initialize arrays for each attribute
-	for att in attributes:
-		all_data[att] = [None] * num_slices
+		span.append(u['position'])
+		Q_v.append(np.trapezoid(u_vals, x=y_vals))
+		Q_m.append(np.trapezoid(u_vals*rho_vals, x=y_vals))
 
-	# Process each slice
-	for idx, x in enumerate(x_span):
-		x_min = x - slice_width
-		x_max = x + slice_width
-		
-		inside_mask, rectangle = find_particles_in_rectangle(vtk_data.points, x_min, y_min, x_max, y_max)
+	Q_v = np.asarray(Q_v)
+	Q_m = np.asarray(Q_m)
+	span = np.asarray(span)
 
-		
-		# Skip if no particles found
-		if not np.any(inside_mask):
-			continue
-			
-		projected_points, projected_attributes, vertical_line = project_particles(vtk_data, inside_mask, rectangle)
-		
-		# Extract y positions
-		y_data = projected_points[:, 1]
-		nb_part = len(y_data)
-		
-		if nb_part == 0:
-			continue
-			
-		# Create single dict for current slice data
-		slice_data = {"y": y_data}
-		for att in attributes:
-			if att == "velocity":
-				slice_data[att] = projected_attributes[att][:, 0]  # u_x only
-			else:
-				slice_data[att] = projected_attributes[att]
-		
-		# Update minimum particle count
-		if nb_part < current_min_particles:
-			current_min_particles = nb_part
-			
-			# If remove is enabled, update all previous slices to match new minimum
-			if remove:
-				for j in range(idx):
-					if all_data["y"][j] is not None and len(all_data["y"][j]) > current_min_particles:
-						# Create temporary dict for this slice
-						temp_dict = {"y": all_data["y"][j]}
-						for att in attributes:
-							temp_dict[att] = all_data[att][j]
-						
-						# Apply filtering
-						filtered_dict = remove_part(temp_dict, current_min_particles)
-						
-						# Update all_data with filtered values
-						all_data["y"][j] = filtered_dict["y"]
-						for att in attributes:
-							all_data[att][j] = filtered_dict[att]
-		
-		# Add this slice's data (filter if needed)
-		if remove and nb_part > current_min_particles:
-			filtered_dict = remove_part(slice_data, current_min_particles)
-			all_data["y"][idx] = filtered_dict["y"]
-			for att in attributes:
-				all_data[att][idx] = filtered_dict[att]
-		else:
-			all_data["y"][idx] = slice_data["y"]
-			for att in attributes:
-				all_data[att][idx] = slice_data[att]
+	# Calculate error
+	Q_m_th = Q_v_th*rho0
+	Q_v_mean = np.mean(Q_v)
+	Q_m_mean = np.mean(Q_m)
+	error_Q_v = 100 * (Q_v_th - Q_v_mean) / Q_v_th
+	error_Q_m = 100 * (Q_m_th - Q_m_mean) / Q_m_th
 
-	# Clean up None values
-	valid_indices = [i for i, y in enumerate(all_data["y"]) if y is not None]
-	all_data["x_positions"] = all_data["x_positions"][valid_indices]
-	all_data["y"] = [all_data["y"][i] for i in valid_indices]
-	for att in attributes:
-		all_data[att] = [all_data[att][i] for i in valid_indices]
+	print(f'Error on flow rate: {error_Q_v}%')
+	print(f'Error on masss flow: {error_Q_v}%')
 
-	# Plotting
 	if plot:
-		configure_latex()
-		
-		for att in attributes:
-			plt.figure(figsize=(6.7, 5))
-			
-			att_min, att_max = [], []
-			for i in range(len(all_data["y"])):
-				if len(all_data[att][i]) > 0:  # Check for non-empty arrays
-					
-					plt.scatter(all_data["y"][i], all_data[att][i], s=5)
-					att_min.append(np.min(all_data[att][i]))
-					att_max.append(np.max(all_data[att][i]))
-			
-			if not att_min or not att_max:  # Skip if no valid data
-				plt.close()
-				continue
-				
-			att_min_min = np.min(att_min)
-			att_max_max = np.max(att_max)
-			
-			# Labels
-			if att == "velocity":
-				plt.ylabel(f'Velocity u(y) {dimensions.get(att, "")}')
-			elif att == "p_/_rho^2":
-				plt.ylabel(fr'Pressure $p / \rho^2$ {dimensions.get(att, "")}')
-			elif att == "density":
-				plt.ylabel(fr'Density $\rho$ {dimensions.get(att, "")}')
-			else:
-				plt.ylabel(f'{att.capitalize()} {dimensions.get(att, "")}')
-			
-			plt.xlabel('Distance y [m]')
-			plt.tight_layout()
-			
-			if save:
-				if att == "p_/_rho^2":
-					plt.savefig(fr'Pictures/CH5_valid_test/{save_path}_p_rho2_multiple.pdf')
-				else:
-					plt.savefig(fr'Pictures/CH5_valid_test/{save_path}_{att}_multiple.pdf')
-			
-		if save:
-			plt.close('all')  # Close all figures to free memory
-		else:
-			plt.show()
 
-	return all_data
-
-
-def integrate_slice(multiple_data,
-					x_start, x_end,
-					Q_init=0.18, rho_0=1000,
-					plot=False,
-					save=False):
-	"""
-	Optimized version of integrate_slice function with:
-	- Vectorized operations
-	- Reduced redundant calculations
-	- Early skipping of invalid data
-	- More efficient data handling
-	"""
-	# Validate input data
-	if not multiple_data['velocity'] or len(multiple_data['velocity']) == 0:
-		print("No velocity data to process")
-		return [], []
-		
-	x_span = np.linspace(x_start, x_end, len(multiple_data['velocity']))
-	y_min, y_max = np.min(multiple_data['y'][0]), np.max(multiple_data['y'][0])
-	U_0 = multiple_data['velocity'][0][0]
-	print(f'Numerical initial flow rate :{(y_max - y_min)* U_0}')
-
-	# Pre-allocate arrays for results
-	vol_flow_rates = []
-	mass_flow_rates = []
-	valid_indices = []
-
-	# Calculate initial mass flow rate once
-	Q_init = (y_max - y_min)* U_0
-	mass_flow_init = Q_init * rho_0
-
-	# Process each slice using vectorized operations where possible
-	for idx, (u, y, rho) in enumerate(zip(multiple_data['velocity'], multiple_data['y'], multiple_data['density'])):
-		# Skip early if data is empty
-		if len(u) == 0 or len(y) == 0:
-			continue
-			
-		try:
-			# Convert to numpy arrays if not already (avoid redundant conversions)
-			u = np.asarray(u)
-			y = np.asarray(y)
-			rho = np.asarray(rho)
-			
-			# Skip early if data is invalid
-			if np.any(np.isnan(u)) or np.any(np.isnan(y)) or np.any(np.isnan(rho)):
-				print(f"Invalid data at slice {idx}, position x = {x_span[idx]}")
-				continue
-				
-			# Sort data by y-coordinate for integration - use argsort once
-			sort_idx = np.argsort(y)
-			y_sorted = y[sort_idx]
-			u_sorted = u[sort_idx]
-			rho_sorted = rho[sort_idx]
-			
-			# Calculate volumetric flow rate (m³/s per unit depth)
-			vol_flow = np.trapezoid(u_sorted, x=y_sorted)
-			
-			# Skip negative flow rates (likely integration errors)
-			if vol_flow < 0:
-				print(f"Negative volumetric flow at x = {x_span[idx]}")
-				continue
-				
-			# Calculate mass flow rate (kg/s per unit depth)
-			# Pre-compute the product for mass flow integration
-			mass_flow = np.trapezoid(rho_sorted * u_sorted, x=y_sorted)
-			
-			# Store valid results
-			vol_flow_rates.append(vol_flow)
-			mass_flow_rates.append(mass_flow)
-			valid_indices.append(idx)
-			
-		except Exception as e:
-			print(f"Error processing slice {idx} at x = {x_span[idx]}: {str(e)}")
-
-	# Convert to numpy arrays once
-	valid_indices = np.array(valid_indices)
-	
-	# Skip processing if no valid data
-	if len(valid_indices) == 0:
-		print("No valid data to process")
-		return [], []
-		
-	filtered_x_span = x_span[valid_indices]
-	vol_flow_rates = np.array(vol_flow_rates)
-	mass_flow_rates = np.array(mass_flow_rates)
-
-	# Calculate statistics once
-	mean_vol_flow = np.mean(vol_flow_rates)
-	mean_mass_flow = np.mean(mass_flow_rates)
-	vol_flow_error = 100 * (Q_init - mean_vol_flow) / Q_init
-	mass_flow_error = 100 * (mass_flow_init - mean_mass_flow) / mass_flow_init
-
-	print(f"Valid slices: {len(valid_indices)} out of {len(multiple_data['velocity'])}")
-	print(f"Mean volumetric flow rate: {mean_vol_flow:.6f} m³/s")
-	print(f"Volumetric flow error: {vol_flow_error:.2f}%")
-	print(f"Mean mass flow rate: {mean_mass_flow:.6f} kg/s")
-	print(f"Mass flow error: {mass_flow_error:.2f}%")
-
-	# Plot results - reuse common calculations
-	if plot:
-		x_max = np.max(x_span)
-		bar_width = x_span[1]-x_span[0] if len(x_span) > 1 else 0.1
-		
-		# Volumetric flow rate
-		plt.figure(figsize=(10, 6))
-		plt.bar(filtered_x_span, vol_flow_rates, alpha=0.7, color='royalblue', width=bar_width)
-		plt.hlines(Q_init, 0, x_max, color='red', linestyle='--', linewidth=2, 
-				label=fr'Initial Q: {Q_init:.6f} m$^2$/s')
-		plt.hlines(mean_vol_flow, 0, x_max, color='navy', linestyle='-', linewidth=2,
-				label=f'Mean Q: {mean_vol_flow:.6f} m³/s ({vol_flow_error:.2f}%)')
+		# Flow rate
+		plt.figure(figsize=(12, 8))
+		plt.bar(span, Q_v, alpha=0.7, color='royalblue', width=span[1] - span[0])
+		plt.hlines(Q_v_th, span[0], span[-1], color='red', linestyle='--', linewidth=2, 
+				label=fr'Initial Q: {Q_v_th:.6f} [m$^2$/s]')
+		plt.hlines(Q_v_mean, span[0], span[-1], color='navy', linestyle='-', linewidth=2,
+				label=fr'Mean Q: {Q_v_mean:.6f} [m$^2$/s] ({error_Q_v:.2f}%)')
 		plt.xlabel('Position x [m]')
-		plt.ylabel(r'Volumetric flow rate [m$^2$/s]')
-		plt.title('Volumetric Flow Rate Conservation')
+		plt.ylabel(r'Flow rate [m$^2$/s]')
 		plt.grid(True, alpha=0.3)
 		plt.legend()
 		plt.tight_layout()
-		if save:
-			plt.savefig('Pictures/CH5_valid_test/turbulent/volumetric_flow_conservation.pdf', dpi=300)
-			plt.close()  # Close to free memory
-		
-		# Mass flow rate
-		plt.figure(figsize=(10, 6))
-		plt.bar(filtered_x_span, mass_flow_rates, alpha=0.7, color='seagreen', width=bar_width)
-		plt.hlines(mass_flow_init, 0, x_max, color='red', linestyle='--', linewidth=2,
-				label=f'Initial mass flow: {mass_flow_init:.6f} kg/s')
-		plt.hlines(mean_mass_flow, 0, x_max, color='darkgreen', linestyle='-', linewidth=2,
-				label=f'Mean mass flow: {mean_mass_flow:.6f} kg/s ({mass_flow_error:.2f}%)')
+		if save and savepath is not None:
+			plt.savefig(f'{savepath}/flow_rate.pdf', dpi=300)
+
+		# Mass flow
+		plt.figure(figsize=(12, 8))
+		plt.bar(span, Q_m, alpha=0.7, color='green', width=span[1] - span[0])
+		plt.hlines(Q_m_th, span[0], span[-1], color='red', linestyle='--', linewidth=2, 
+				label=fr'Initial Q: {Q_m_th:.6f} [Kg/s]')
+		plt.hlines(Q_m_mean, span[0], span[-1], color='navy', linestyle='-', linewidth=2,
+				label=fr'Mean Q: {Q_m_mean:.6f} [Kg/s] ({error_Q_m:.2f}%)')
 		plt.xlabel('Position x [m]')
-		plt.ylabel('Mass flow rate [kg/s]')
-		plt.title('Mass Flow Rate Conservation')
+		plt.ylabel(r'Mass flow [Kg/s]')
 		plt.grid(True, alpha=0.3)
 		plt.legend()
 		plt.tight_layout()
-		if save:
-			plt.savefig('Pictures/CH5_valid_test/turbulent/mass_flow_conservation.pdf', dpi=300)
-			plt.close()  # Close to free memory
-		else:
-			plt.show()
+		if save and savepath is not None:
+			plt.savefig(f'{savepath}/mass_flow.pdf', dpi=300)
 
-	return Q_init
+
+	return Q_v, Q_m
 
 
 def analyze_particle_distribution(vtk_data, x_slice, delta_x=0.1, n_bins=50, plot=True):

@@ -10,6 +10,11 @@ from own_python.write_scenes.Tools_scenes import *
 #--------------------------#
 #   SIMULATION PARAMETERS  #
 #--------------------------#
+
+# Define output paths
+json_path = "SPlisHSPlasH/data/Scenes/turbulent_pipe.json"
+output_path = "SPlisHSPlasH/bin/output/turbulent_pipe"
+
 r = 0.02                  # Particle radius
 U_0 = 5                   # Initial velocity
 t_end = 20                # End time
@@ -21,7 +26,7 @@ clean_output = True       # Clean output folder
 rho_0 = 1000              # Reference density
 sim2D = True              # 2D simulation
 mapInvert = False         # Invert domain
-attr = "velocity;angular velocity;p / rho^2;density"  # Export attributes
+attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density;time;dt;mass"
 
 # SPH PARAMETERS
 xsph_fluid = 0.2          # Fluid XSPH
@@ -147,14 +152,14 @@ data = {
         "cflMethod": 2,
         "cflFactor": 0.4,
         "cflMaxTimeStepSize": 0.005,
-        "maxIterations": 2000,
-        "maxError": 0.001,
-        "maxIterationsV": 2000,
-        "maxErrorV": 0.001,
+        "maxIterations": 200,
+        "maxError": 0.05,
+        "maxIterationsV": 200,
+        "maxErrorV": 0.05,
         "enableDivergenceSolver": True,
         "boundaryHandlingMethod": boundaryHandlingMethod,
-        "viscoMaxIter":1000,
-        "viscoMaxError":0.0001
+        "viscoMaxIter":500,
+        "viscoMaxError":0.05,
     },
 
     "Materials": [
@@ -227,9 +232,7 @@ print("\n--- Particle Reuse Bounding Box ---")
 print(f"Min: {box_min}")
 print(f"Max: {box_max}\n")
 
-# Define output paths
-json_path = "SPlisHSPlasH/data/Scenes/channel_curve_2D.json"
-output_path = "SPlisHSPlasH/bin/output/channel_curve_2D"
+
 
 # Clean output directory
 if clean_output:

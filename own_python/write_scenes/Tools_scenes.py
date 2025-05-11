@@ -11,11 +11,82 @@ import random
 #---------------------------------#
 
 def clean_files(directory):
-    import shutil
-    if os.path.exists(directory):
-        shutil.rmtree(directory)
-    os.makedirs(directory, exist_ok=True)
+	import shutil
+	if os.path.exists(directory):
+		shutil.rmtree(directory)
+	os.makedirs(directory, exist_ok=True)
+	
+def calculate_emitter_particle_positions(emitter_pos, width, height, particle_radius):
+	# Calculate particle diameter
+	diam = 2.0 * particle_radius
+	
+	# Calculate starting offsets (like in the C++ code)
+	startX = -0.5 * (width - 1) * diam
+	startZ = -0.5 * (height - 1) * diam
+	
+	# Get rotation axes (simplified for default case)
+	axisHeight = np.array([0, 1, 0])  # Y axis
+	axisWidth = np.array([1, 0, 0])   # X axis
+	
+	# Calculate positions
+	positions = []
+	for j in range(height):
+		for i in range(width):
+			pos = emitter_pos + (i*diam + startX)*axisWidth + (j*diam + startZ)*axisHeight
+			positions.append(pos)
+	pos = positions[1:-1]
+	y_pos = np.array([val[1] for val  in pos])
+	
+	return y_pos
 
+def write_summary(summary_path, data, additional_params=None):
+	"""
+	Writes a file summarizing all simulation parameters using the existing data dictionary.
+	
+	Args:
+		summary_path (str): Path where to save the summary file
+		data (dict): The main data dictionary used for the simulation
+		additional_params (dict, optional): Any additional parameters not in data
+	"""
+	# Create directory if needed
+	os.makedirs(os.path.dirname(summary_path), exist_ok=True)
+	
+	with open(summary_path, 'w') as f:
+		f.write("=== SIMULATION PARAMETERS SUMMARY ===\n\n")
+		
+		# First write the main simulation data
+		for section, params in data.items():
+			f.write(f"=== {section} ===\n")
+			
+			# Handle different types of sections
+			if isinstance(params, list):
+				# For list sections like Materials, RigidBodies, etc.
+				for i, item in enumerate(params):
+					f.write(f"--- Item {i+1} ---\n")
+					for param_name, param_value in item.items():
+						param_str = str(param_value).replace('\n', ' ')
+						f.write(f"{param_name}: {param_str}\n")
+					f.write("\n")
+			else:
+				# For dict sections like Configuration
+				for param_name, param_value in params.items():
+					param_str = str(param_value).replace('\n', ' ')
+					f.write(f"{param_name}: {param_str}\n")
+			f.write("\n")
+		
+		# Add any additional parameters not in the main data structure
+		if additional_params:
+			f.write("=== Additional Parameters ===\n")
+			for section, params in additional_params.items():
+				f.write(f"--- {section} ---\n")
+				for param_name, param_value in params.items():
+					param_str = str(param_value).replace('\n', ' ')
+					f.write(f"{param_name}: {param_str}\n")
+				f.write("\n")
+		
+		f.write("=== END OF SUMMARY ===\n")
+	
+	print(f"Parameters summary written to '{summary_path}'")
 
 #----------------------#
 #   UTILITY FUNCTIONS  #
@@ -88,6 +159,8 @@ def calculate_lx_for_total_length(Lx_max, nb_elem, alpha_tot):
     print(f"Calculated rectangle length (Lx) for narrowing: {Lx}")
     
     return Lx
+
+
 
 
 def create_narrowing(Lx, Ly, Lz, alpha_tot, nb_elem, x_start, y_init):

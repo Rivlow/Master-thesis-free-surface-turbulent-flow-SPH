@@ -309,48 +309,186 @@ def compute_theoretical_water_height(Q_init=0.18):
 
 	return x_all, z_all, h_all, Fr_all
 
-
-def compute_mass_flow_rate(x_span, vtk):
+def annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False):
 	"""
-	Calculate the mass flow rate.
-
+	Plot water heights with annotations for different hydraulic regions.
+	
 	Args:
-		x_span (array): Range of x positions
-		vtk: VTK data
-
-	Returns:
-		float: Average mass flow rate
+		x_all (array): x-coordinates along the channel
+		z_all (array): bed elevations
+		h_all (array): water heights
+		Fr_all (array): Froude numbers
+		save (bool): If True, saves the plot to a file
 	"""
-	points = vtk.points
-	x = points[:, 0]
-	y = points[:, 1]
-	rho = vtk['density']
-	u = np.linalg.norm(vtk['velocity'], axis=1)
+	# Constants
+	x_cr = 10.0  # Critical point
+	x_ressaut = 11.6657  # Hydraulic jump position
+	
+	# Create figure
+	fig, ax = plt.subplots(figsize=(12, 7))
+	
+	# Plot bed profile and water surface
+	ax.plot(x_all, z_all + h_all, 'b-', linewidth=2)
+	ax.plot(x_all, z_all, 'k-', linewidth=2)
+	
+	# Fill water area
+	#ax.fill_between(x_all, z_all, z_all + h_all, color='lightblue', alpha=0.5)
+	
+	# Mark critical point
+	ax.plot(x_cr, z_all[np.abs(x_all - x_cr).argmin()] + 
+		h_all[np.abs(x_all - x_cr).argmin()], 'ko', markersize=8, label='Critical point')
+	
+	# Mark hydraulic jump position
+	ax.plot(x_ressaut, z_all[np.abs(x_all - x_ressaut).argmin()] + 
+		h_all[np.abs(x_all - x_ressaut).argmin()], 'ro', markersize=8, label='Hydraulic jump')
+	
+	# Define region boundaries
+	inlet_region = x_all < x_cr
+	critical_region = (x_all >= x_cr) & (x_all < x_ressaut)
+	outlet_region = x_all >= x_ressaut
+	
+	# Color regions (using alpha to maintain visibility of the water surface)
+	ax.fill_between(x_all[inlet_region], 
+				z_all[inlet_region], 
+				z_all[inlet_region] + h_all[inlet_region] , 
+				color='blue', label= 'Inlet region', alpha=0.2)
+	
+	ax.fill_between(x_all[critical_region], 
+				z_all[critical_region], 
+				z_all[critical_region] + h_all[critical_region], 
+				color='red', label= 'Jump region',alpha=0.2)
+	
+	ax.fill_between(x_all[outlet_region], 
+				z_all[outlet_region], 
+				z_all[outlet_region] + h_all[outlet_region], 
+				color='yellow', label= 'Outlet region',alpha=0.2)
+	
+	'''
+	# Add annotations for regions
+	ax.annotate('Inlet region', xy=(5, z_all[np.abs(x_all - 5).argmin()] + 
+			h_all[np.abs(x_all - 5).argmin()] + 0.1), fontsize=16)
+	
+	ax.annotate('Critical region', xy=(x_cr + 0.5, z_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 
+			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 0.1), fontsize=16)
+	
+	ax.annotate('Outlet region', xy=(x_ressaut + 2, z_all[np.abs(x_all - (x_ressaut + 2)).argmin()] + 
+			h_all[np.abs(x_all - (x_ressaut + 2)).argmin()] + 0.1), fontsize=16)
+	'''
 
-	Q_all = []
 
-	for i in range(1, len(x_span)):
-		# Filter points in current slice
-		filter_mask = (x_span[i-1] <= x) & (x <= x_span[i])
+	
+	# Add annotation for x_cr
+	h_cr = z_all[np.abs(x_all - x_cr).argmin()] + h_all[np.abs(x_all - x_cr).argmin()]
+	ax.set_yticks([h_all[0], h_cr, h_all[-1]], [r'$h_{\text{inlet}}$', r'$h_{\text{cr}}$', r'$h_{\text{outlet}}$'])
+	ax.set_xticks([x_cr, x_ressaut], [r'$x_{\text{cr}}$', r'$x_{\text{jump}}$'])
+	
+	# Add Roman numerals for flow regimes (similar to the image)
+	ax.annotate('I', xy=(x_cr - 1, z_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 
+			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] - 0.1), fontsize=20, 
+			bbox=dict(boxstyle="circle", fc="lightblue", ec="blue", alpha=0.7))
+	
+	ax.annotate('II', xy=(x_cr + 0.5, z_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 
+			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] - 0.1), fontsize=20, 
+			bbox=dict(boxstyle="circle", fc="lightblue", ec="blue", alpha=0.7))
+	
+	ax.annotate('III', xy=(x_cr + 2, z_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 
+			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] - 0.1), fontsize=20, 
+			bbox=dict(boxstyle="circle", fc="lightblue", ec="blue", alpha=0.7))
+	
+	# Add vertical lines for region boundaries
+	#ax.axvline(x=x_cr, color='red', linestyle='--', linewidth=1.5)
+	#ax.axvline(x=x_ressaut, color='red', linestyle='--', linewidth=1.5)
+	
+	# Plot configuration
+	ax.set_xlim(7, 13)
+	ax.set_xlabel('Distance x [m]', fontsize=14)
+	ax.set_ylabel('Height [m]', fontsize=14)
+	ax.legend(loc='best')
+	ax.grid(True, alpha=0.3)
+	
+	# Add Froude number subplot
 
-		rho_inlet = rho[filter_mask]
-		u_inlet = u[filter_mask]
-		x_inlet = x[filter_mask]
-		y_inlet = y[filter_mask]
+	#plt.title('Hydraulic Flow Profile with Jump', fontsize=16)
+	plt.tight_layout()
+	
+	if save:
+		plt.savefig("Pictures/CH5_valid_test/free_surface/annotated_hydraulic_jump.pdf", dpi=300)
+	
+	return fig, ax
 
-		# Sort by height
-		sort_indices = np.argsort(y_inlet)
-		y_sort = y_inlet[sort_indices]
-		x_sort = x_inlet[sort_indices]
-		u_sort = u_inlet[sort_indices]
-		rho_sort = rho_inlet[sort_indices]
-
-		# Calculate integral
-		print(rho_sort)
-		integral = np.trapeze(rho_sort * u_sort, x=y_sort)
-		Q_all.append(integral)
-
-	return np.mean(Q_all)
+def plot_conjugate_height(x_all, z_all, h_all, Fr_all, save=False):
+	"""
+	Plot water heights with conjugate heights and mark known hydraulic jump location.
+	
+	Args:
+		x_all (array): x-coordinates along the channel
+		z_all (array): bed elevations
+		h_all (array): water heights
+		Fr_all (array): Froude numbers
+		save (bool): If True, saves the plot to a file
+	"""
+	# Constants
+	g = 9.81  # m/s²
+	x_cr = 10.0  # Critical point (m)
+	x_ressaut = 11.6657  # Known hydraulic jump position (m)
+	
+	# Create figure
+	fig, ax = plt.subplots(figsize=(12, 7))
+	
+	# Find indices for critical point and hydraulic jump
+	cr_idx = np.abs(x_all - x_cr).argmin()
+	ressaut_idx = np.abs(x_all - x_ressaut).argmin()
+	
+	# Calculate conjugate heights for the entire region from x_cr to slightly past x_ressaut
+	# First determine the range to calculate conjugate heights for
+	start_idx = cr_idx-300
+	print(start_idx)
+	# End slightly past the hydraulic jump (20% more than the distance from critical to jump)
+	extend_past_jump = int((ressaut_idx - cr_idx) * 0.2)+200
+	end_idx = min(ressaut_idx + extend_past_jump, len(x_all) - 1)
+	
+	# Extract data for this region
+	x_conj_region = x_all[start_idx:end_idx]
+	z_conj_region = z_all[start_idx:end_idx]
+	h_conj_region = h_all[start_idx:end_idx]
+	Fr_conj_region = Fr_all[start_idx:end_idx]
+	
+	# Calculate conjugate heights
+	h_conj = np.zeros_like(h_conj_region)
+	for i, h in enumerate(h_conj_region):
+		Fr = Fr_conj_region[i]
+		h_conj[i] = h * 0.5 * (np.sqrt(1 + 8 * Fr**2) - 1)
+	
+	# Plot bed profile and water surface
+	ax.plot(x_all, z_all + h_all, 'b-', linewidth=2, label='Water surface')
+	ax.plot(x_all, z_all, 'k-', linewidth=2, label='Bed profile')
+	
+	# Fill water area
+	ax.fill_between(x_all, z_all, z_all + h_all, color='lightblue', alpha=0.5)
+	
+	# Plot conjugate height curve
+	ax.plot(x_conj_region, z_conj_region + h_conj, 'r--', linewidth=2, label='Conjugate height')
+	
+	# Mark hydraulic jump location with a colored point
+	jump_height = h_all[ressaut_idx] + z_all[ressaut_idx]
+	ax.plot(x_ressaut, jump_height, 'ro', markersize=10, label=f'Hydraulic jump')
+	
+	# Add a vertical line at the jump location
+	#ax.axvline(x=x_ressaut, color='red', linestyle=':', linewidth=1.5)
+		
+	# Plot configuration
+	ax.set_xlabel('Distance x [m]', fontsize=14)
+	ax.set_xlim(7, 13)  # Focus on the relevant region
+	ax.set_ylabel('Height [m]', fontsize=14)
+	ax.legend(loc='best')
+	ax.grid(True, alpha=0.3)
+	
+	plt.tight_layout()
+	
+	if save:
+		plt.savefig("Pictures/CH5_valid_test/free_surface/conjugate_height.pdf", dpi=300)
+	
+	return fig, ax
 
 
 def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
@@ -391,168 +529,54 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
 	if save:
 		plt.savefig("Pictures/CH5_valid_test/free_surface/water_height_last.pdf")
 		
-def checkHydrostatic(all_data, save_path=None, plot=True, save=False):
-    """
-    Verify if the SPH particle pressure follows hydrostatic pressure distribution.
-    
-    Parameters:
-    - all_data: Dictionary containing simulation data
-    - save_path: Path prefix for saving plots
-    - plot: Whether to display plots
-    - save: Whether to save plots to files
-    
-    Returns:
-    - Dictionary with hydrostatic analysis results
-    """
-    # Extract data
-    p_rho2 = all_data['p_/_rho^2']
-    y_data = all_data["y"]
-    rho = all_data["density"]
-    x_positions = all_data["x_positions"]
-    
-    # Check if we have data
-    if not y_data or len(y_data) == 0:
-        print("No data to analyze.")
-        return None
-    
-    # Calculate means for each slice
-    y_mean = []
-    p_mean = []
-    rho_mean = []
-    
-    for i in range(len(y_data)):
-        if len(y_data[i]) > 0:  # Check for non-empty slices
-            y_mean.append(np.mean(y_data[i]))
-            p_mean.append(np.mean(p_rho2[i]))
-            rho_mean.append(np.mean(rho[i]))
-    
-    # Convert to arrays for easier manipulation
-    p_m = np.array(p_mean)
-    rho_m = np.array(rho_mean)
-    y_m = np.array(y_mean)
-    
-    # Calculate pressure from p/rho² and density
-    p = p_m * rho_m * rho_m
-    
-    # Theoretical hydrostatic pressure calculation
-    # P = P₀ + ρgy where g is gravity (assuming g=9.81 m/s²)
-    g = 9.81  # gravitational acceleration
-    y_range = np.linspace(min(y_m), max(y_m), 100)
-    
-    # Calculate hydrostatic pressure using average density
-    rho_avg = np.mean(rho_m)
-    p_hydrostatic = p[0] + rho_avg * g * (y_range - y_m[0])
-    
-    # Additionally, try linear regression to find best fit
-    from scipy import stats
-    slope, intercept, r_value, p_value, std_err = stats.linregress(y_m, p)
-    p_linear = slope * y_range + intercept
-    
-    if plot:
-        # Set up plotting with LaTeX if available
-        try:
-            plt.rcParams.update({
-                "text.usetex": True,
-                "font.family": "serif",
-                "font.serif": ["Computer Modern Roman"],
-            })
-        except:
-            pass
-        
-        # Figure 1: Mean pressure vs. height
-        plt.figure(figsize=(10, 6))
-        plt.plot(y_m, p, 'o-', label='Mean Pressure', color='blue')
-        plt.plot(y_range, p_hydrostatic, '--', label=f'Theoretical (g={g})', color='red')
-        plt.plot(y_range, p_linear, '-.', label=f'Best Fit (slope={slope:.2f})', color='green')
-        
-        plt.xlabel('Height y [m]')
-        plt.ylabel('Pressure [Pa]')
-        plt.title('Hydrostatic Pressure Analysis')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        if save and save_path:
-            plt.savefig(f'Pictures/CH5_valid_test/{save_path}_hydrostatic_mean.pdf')
-        
-        # Figure 2: All particles pressure vs. height with coloring by x-position
-        plt.figure(figsize=(10, 6))
-        
-        # Plot mean pressure
-        plt.plot(y_m, p, 'o-', color='black', alpha=0.7, label='Mean Pressure')
-        
-        # Plot all particles colored by x-position
-        cmap = plt.cm.viridis
-        norm = plt.Normalize(min(x_positions), max(x_positions))
-        
-        for i in range(len(y_data)):
-            if len(y_data[i]) > 0:
-                p_values = np.array(p_rho2[i]) * np.array(rho[i]) * np.array(rho[i])
-                plt.scatter(y_data[i], p_values, s=5, alpha=0.4, 
-                           color=cmap(norm(x_positions[i])))
-        
-        # Add colorbar for x-position
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        
-        plt.xlabel('Height y [m]')
-        plt.ylabel('Pressure [Pa]')
-        plt.title('Particle Pressure Distribution')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        if save and save_path:
-            plt.savefig(f'Pictures/CH5_valid_test/{save_path}_hydrostatic_particles.pdf')
-        
-        # Figure 3: Residuals from theoretical hydrostatic pressure
-        plt.figure(figsize=(10, 6))
-        
-        # Interpolate theoretical pressure at actual y positions
-        from scipy.interpolate import interp1d
-        p_hydro_interp = interp1d(y_range, p_hydrostatic)
-        p_hydro_at_y = p_hydro_interp(y_m)
-        
-        # Calculate residuals
-        residuals = p - p_hydro_at_y
-        
-        plt.plot(y_m, residuals, 'o-', color='purple')
-        plt.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-        
-        plt.xlabel('Height y [m]')
-        plt.ylabel('Pressure Residual [Pa]')
-        plt.title('Deviation from Hydrostatic Pressure')
-        plt.grid(True, alpha=0.3)
-        
-        if save and save_path:
-            plt.savefig(f'Pictures/CH5_valid_test/{save_path}_hydrostatic_residuals.pdf')
-        
-        # Show plots if not saving
-        if not save:
-            plt.show()
-        else:
-            plt.close('all')
-    
-    # Calculate goodness of fit metrics
-    r_squared = r_value**2
-    
-    # Calculate mean absolute error from theoretical hydrostatic
-    from scipy.interpolate import interp1d
-    p_hydro_interp = interp1d(y_range, p_hydrostatic)
-    p_hydro_at_y = p_hydro_interp(y_m)
-    mae = np.mean(np.abs(p - p_hydro_at_y))
-    
-    # Return analysis results
-    results = {
-        'y_mean': y_m,
-        'pressure_mean': p,
-        'density_mean': rho_m,
-        'theoretical_slope': rho_avg * g,
-        'fitted_slope': slope,
-        'r_squared': r_squared,
-        'mean_absolute_error': mae,
-        'is_hydrostatic': r_squared > 0.95  # Consider hydrostatic if R² > 0.95
-    }
-    
-    return results
+def check_hydrostatic(all_data, dt,
+					y_start, y_end, 
+					plot=False, save=False):
+	"""
+	Simple verification of hydrostatic pressure distribution.
+	Computes mean pressure for each y-value, performs linear regression,
+	and compares with theoretical hydrostatic pressure.
+	"""
+	# Extract data
+	p_rho2 = all_data['p_/_rho^2']
+	y_data = all_data["y"]
+	rho = all_data["density"]
+
+	p_reg = []
+	p_raw = []
+	
+	
+	for i in range(len(p_rho2)):
+
+		p_r2 = np.array(p_rho2[i])
+		r = np.array(rho[i])
+		p_raw.append(p_r2 * r/(dt*dt))
+		slope, intercept, r_value, p_value, std_err = stats.linregress(y_data[i], p_raw[i])
+
+		y_range = np.linspace(y_start, y_end, 100)
+		p_reg.append(slope * y_range + intercept)
+
+	if plot:
+		plt.figure()
+		for i in range(len(p_rho2)):
+			plt.scatter(y_data[i], p_raw[i], s=1)
+			plt.plot(y_range, p_reg[i])
+
+	p_mean = np.mean(p_reg, axis=0)
+	g = 9.81  # gravitational acceleration
+	p_theoretical =  1000 * g * y_range[::-1]
+	
+	if plot:
+		plt.plot(y_range, p_mean, 'k-', label='Mean Regression', linewidth=2)
+		plt.plot(y_range, p_theoretical, 'r--', label='Theoretical Hydrostatic Pressure', linewidth=2)
+		plt.xlabel('Hauteur y [m]')
+		plt.ylabel('Pression [Pa]')
+		plt.legend()
+		plt.grid(True, alpha=0.3)
+		
+		
+		plt.show()
+	
 
 def main():
 
@@ -562,14 +586,17 @@ def main():
 	# Calculate theoretical water heights
 	x_all, z_all, h_all, Fr_all = compute_theoretical_water_height(U_0*0.5)
 
+
 	# Create plot
 	fig, ax1 = plt.subplots(figsize=(10, 6))
 
 	# Plot free surface and topography
-	ax1.plot(x_all, h_all + z_all, label='Free surface')
-	ax1.plot(x_all, z_all, 'k-', label='Topography')
-	ax1.fill_between(x_all, z_all, z_all + h_all, color='lightblue', alpha=0.5)
+	#ax1.plot(x_all, h_all + z_all, label='Free surface')
+	#ax1.plot(x_all, z_all, 'k-', label='Topography')
+	#ax1.fill_between(x_all, z_all, z_all + h_all, color='lightblue', alpha=0.5)
 	# ax1.plot(x_amont, z_amont + h2_conj, linestyle='--', label=r'conjugated $h2_{\text{(x_amont)}}
+
+	annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False)
 
 
 if __name__ == "__main__":

@@ -24,13 +24,13 @@ def main():
 	#-----------------------------#
 
 	# Simulation time and step
-	t_end = 15*s
-	timeStepSize = 0.001*s
+	t_end = 25*s
+	timeStepSize = 0.0005*s
 	sim2D = False
 	maxEmitterParticles = 10000000
 
 	# Physical parameters
-	r = 0.01/4*m                # Particle radius
+	r = 2.5* (mm)                # Particle radius
 	particle = 2*r            # Particle diameter
 	U_0 = 0.15 *(m/s)            # Initial velocity
 	Fr = isFluvial(False)
@@ -40,10 +40,10 @@ def main():
 
 	#------Pressure solver------#
 	simulationMethod = 4       # DFSPH
-	maxIterations = 1000 	   # Density solver
-	maxError = 0.25
+	maxIterations = 2000 	   # Density solver
+	maxError = 0.05
 	maxIterationsV = 1000 	   # Divergence solver
-	maxErrorV = 0.25
+	maxErrorV = 0.05
 
 	#------CFL conditiopn------#
 	cflMethod = 2 # adapative dt + consider nb pressure solver iteration 
@@ -78,15 +78,15 @@ def main():
 	maxIterVel = 100
 	
 	restitution = 0.0
-	friction = 0.9
+	friction = 0.6
+	DampingCoeff = 0.1
 
-	contactTolerance = 2*particle
-	contactStiffnessRigidBody = 1e-8
-	contactStiffnessParticleRigidBody = 1e-8
-	solid_stiffness = 15
+	contactTolerance = 1*particle
+	contactStiffnessRigidBody = 100
+	contactStiffnessParticleRigidBody = 0.1
 
 	#-------Export settings------#
-	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density"
+	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density;time;dt;mass"
 	clean_output = True
 	FPS = 50
 
@@ -100,7 +100,7 @@ def main():
 	Lz_dom = 1.0*m              # Width
 
 	water_height = 100*mm
-	y_init_wood = 1.3*water_height
+	y_init_wood = 1.4*water_height
 	x_entrance = 1.5*m
 
 	#----Bridge dimensions----#
@@ -118,7 +118,7 @@ def main():
 
 	# Emitter configuration
 	Lx_emit = particle
-	Ly_emit = 2*water_height
+	Ly_emit = water_height
 	Lz_emit = Lz_dom - 2*particle
 	Q_init = U_0*Ly_emit*Lz_emit
 
@@ -192,6 +192,9 @@ def main():
 
 	xyz_fluid_inlet_start = [8*particle, 0, -Lz_dom/2 + 2*particle]
 	xyz_fluid_inlet_end = [x_entrance, water_height, Lz_dom/2 - 2*particle]
+
+	print(xyz_fluid_inlet_start)
+	print(xyz_fluid_inlet_end)
 	
 	xyz_fluid_outlet_start = [x_entrance + Lx_roof, 0, -Lz_dom/2 + 2*particle]
 	xyz_fluid_outlet_end = [Lx_dom, water_height, Lz_dom/2 - 2*particle]
@@ -208,7 +211,7 @@ def main():
 	trans_obj_7 = [x_mid, y_init_wood, z_mid - 0.2]
 
 
-	D = 0.035/2
+	D = 0.035
 	L = 0.4
 	dim_wood = [D, L, D] # D, L, D
 	# First cylinder object
@@ -223,14 +226,15 @@ def main():
 		"collisionObjectScale": dim_wood,
 		"color": [0.3, 0.5, 0.8, 1.0],
 		"isDynamic": True,
-		"density": wood_density,
+		"density": 700,
 		"velocity": [0, 0, 0],
-		"restitution": restitution,
-		"friction": friction,
+		"restitution": 0.06,
+		"friction": 0.2,
 		"mapInvert": False,
 		"mapThickness": 0.0,
-		"mapResolution": [40, 40, 40]
+		"mapResolution": [80, 80, 80]
 	})
+
 	
 	# Second cylinder object
 	RigidBodies.append({
@@ -514,9 +518,10 @@ def main():
 		"contactTolerance": contactTolerance,
 		"contactStiffnessRigidBody": contactStiffnessRigidBody, # body-body coupling
 		"contactStiffnessParticleRigidBody": contactStiffnessParticleRigidBody, # fluid-body coupling 
+
+		"damping": DampingCoeff,
 		
 		# Solid parameters
-		"solid_stiffness": solid_stiffness, # rigid bodies
 		"solid_poissonRatio": 0.2,
 		"solid_normalizeStretch": 0,
 		"solid_normalizeShear": 0

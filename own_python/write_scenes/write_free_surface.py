@@ -16,8 +16,10 @@ s = 1
 def main():
 
 	# Write JSON file
-	json_path = "SPlisHSPlasH/data/Scenes/free_surface_2D.json"
-	output_path = "SPlisHSPlasH/bin/output/free_surface_2D"
+	write = True
+	json_path = "SPlisHSPlasH/data/Scenes/free_surface.json"
+	summary_path = "my_output/local/free_surface/r_10mm/summary.txt"
+	output_path = "SPlisHSPlasH/bin/output/free_surface"
 
 	#-----------------------------#
 	#	SIMULATION PARAMETERS	#
@@ -40,15 +42,15 @@ def main():
 	
 	# Export settings
 	clean_output = True
-	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density"  # Exported attributes
-	FPS = 5
+	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density;time;dt;mass"  # Exported attributes
+	FPS = 1
 	
 	#------Pressure solver------#
 	simulationMethod = 4      # DFSPH
-	maxIterations = 2000      # Density solver
-	maxError = 0.005
-	maxIterationsV = 1000     # Divergence solver
-	maxErrorV = 0.005
+	maxIterations = 100      # Density solver
+	maxError = 0.05
+	maxIterationsV = 100     # Divergence solver
+	maxErrorV = 0.05
 
 	#------CFL conditiopn------#
 	cflMethod = 2            # adapative dt + consider nb pressure solver iteration 
@@ -61,14 +63,14 @@ def main():
 	viscosity_boundary = 0.0  # Boundary viscosity
 
 	#------XSPH------#
-	xsph_fluid = 0.015
+	xsph_fluid = 0.04
 	xsph_boundary = 0.0
 
 	#------Vorticity------#
 	vorticityMethod = 1       # Micropolar model
-	vorticity = 0.05          # Vorticity coefficient
-	viscosityOmega = 0.03     # Angular viscosity
-	inertiaInverse = 2        # Inverse inertia
+	vorticity = 0.02          # Vorticity coefficient
+	viscosityOmega = 0.1     # Angular viscosity
+	inertiaInverse = 1        # Inverse inertia
 
 	#------Boundary interaction------#
 	boundaryHandlingMethod = 2 # Volume maps
@@ -96,26 +98,25 @@ def main():
 	Ly_emit = 0.5 * (m)               # Emitter height
 	Lx_emit = particle          # Emitter width
 
-	
 	# Translations
 	trans_emit = [-Lx_emit/2 + particle, Ly_emit/2 + particle, 0]
 	trans_ground_1 = [Lx_1/2, -Ly/2, 0]
 	trans_ground_2 = [parabola_end + Lx_2/2, -Ly/2, 0]
 
 	# Evaluate correct flow rate
-	y_1 = Ly_emit - 2*particle
-	Q_init = U_0*(y_1)
-
+	y_pos = calculate_emitter_particle_positions(trans_emit, int(Lx_emit / (2 * r)), int(Ly_emit / (2 * r)), r)
+	Q_init = U_0*(np.max(y_pos))
+	
 	# Animation field
-	anim_y = 1
-	anim_x = 25*(particle) 
-	trans_anim = [trans_ground_2[0] + Lx_2/2 - anim_x/2, anim_y/2, 0]
-	scale_anim = [anim_x, anim_y, Lz]
+	Ly_anim = 1
+	Lx_anim = 25*(particle) 
+	trans_anim = [trans_ground_2[0] + Lx_2/2 - Lx_anim/2, Ly_anim/2, 0]
+	scale_anim = [Lx_anim, Ly_anim, Lz]
 
 	# Domain bounds
 	x_min = -Lx_emit/2 - 2*r
 	y_min = -2*Ly_emit
-	x_max = parabola_end + Lx_2 + anim_x 
+	x_max = parabola_end + Lx_2 + Lx_anim 
 	y_max = -y_min
 	z_min = -y_max
 	z_max = y_max
@@ -125,21 +126,6 @@ def main():
 	#-------------------------------#
 	
 	RigidBodies = [
-		# Just before emitter 
-		{
-			"geometryFile": "../models/UnitBox.obj",
-			"translation": [-Lx_emit, 2*Ly_emit/2 + particle, 0],
-			"rotationAxis": [1, 0, 0],
-			"rotationAngle": 0,
-			"scale": [3*Lx_emit, 2*Ly_emit, Lz],
-			"color": [0.1, 0.4, 0.6, 1.0], 
-			"isDynamic": False,
-			"isWall": False,
-			"mapInvert": False,
-			"mapThickness": 0.0,
-			"mapResolution": [40, 40, 10],
-			"samplingMode": 1
-		},
 		# First rectangle (left flat section)
 		{
 			"geometryFile": "../models/UnitBox.obj",
@@ -307,7 +293,7 @@ def main():
 		"numberOfStepsPerRenderUpdate": 4,
 		"enableVTKExport": True,
 		"enableRigidBodyVTKExport": True,
-		"dataExportFPS": FPS
+		"dataExportFPS": FPS,
 	}
 
 
@@ -319,22 +305,29 @@ def main():
 		"Emitters": Emitters,
 		"AnimationFields": AnimationFields
 	}
+
+	data_save = {
+		"Configuration": Configuration,
+		"Materials": Materials,
+	}
 	
-	# Clean output directory
-	if clean_output:
-		clean_files(output_path)
-		print('Output folder cleaned')
-	
-	
-	# Ensure directory exists
-	os.makedirs(os.path.dirname(json_path), exist_ok=True)
-	
-	# Write JSON file
-	with open(json_path, 'w') as json_file:
-		json.dump(data, json_file, indent=4)
-	
-	print(f"\nData written to '{json_path}'")
-	
+	if write:
+		# Clean output directory
+		if clean_output:
+			clean_files(output_path)
+			print('Output folder cleaned')
+		
+		write_summary(summary_path, data_save)
+
+		# Ensure directory exists
+		os.makedirs(os.path.dirname(json_path), exist_ok=True)
+		
+		# Write JSON file
+		with open(json_path, 'w') as json_file:
+			json.dump(data, json_file, indent=4)
+		
+		print(f"\nData written to '{json_path}'")
+		
 	
 
 if __name__ == "__main__":
