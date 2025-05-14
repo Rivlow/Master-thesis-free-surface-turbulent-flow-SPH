@@ -21,11 +21,9 @@ from scipy import stats
 # Local imports
 sys.path.append(os.getcwd())
 from own_python.write_scenes.Tools_scenes import *
+from own_python.validation_test.Tools_valid import *
 
 # Style configuration
-SMALL_SIZE = 16
-MEDIUM_SIZE = 18
-BIGGER_SIZE = 18
 plt.rc('font', size=SMALL_SIZE)
 plt.rc('axes', titlesize=MEDIUM_SIZE)
 plt.rc('axes', labelsize=MEDIUM_SIZE)
@@ -167,18 +165,7 @@ def solve_height_aval(q, g, x, z_b, H):
 	
 	
 def extract_water_height(vtk_file, plot=False, save=False):
-	"""
-	Extract water height from a VTK file.
 	
-	Args:
-		vtk_file: VTK file containing the data
-		plot (bool): If True, generates a plot
-		save (bool): If True, saves the plot
-		
-	Returns:
-		tuple: (particle positions, water heights, surface velocities)
-	"""
-	g = 9.81
 	pos = np.array(vtk_file.points)
 	
 	# Only particles with y > 0
@@ -197,8 +184,8 @@ def extract_water_height(vtk_file, plot=False, save=False):
 	bin_edges = np.linspace(x_min, x_max, num_bins + 1)
 	
 	# Highest point (y_max) on each bin and its velocity
-	pos_surf = []
-	u_surf = []
+	pos_top, u, h, Fr =  [], [], [], []
+	Head_rel, Head_abs = [], []
 	
 	for i in range(num_bins):
 		bin_start, bin_end = bin_edges[i], bin_edges[i+1]
@@ -207,13 +194,27 @@ def extract_water_height(vtk_file, plot=False, save=False):
 		bin_velocity = sorted_velocity[mask]
 		
 		if len(bin_points) > 0:
+
 			max_y_index = np.argmax(bin_points[:, 1])  # index of y_max
-			u_surf.append(bin_velocity[max_y_index])
-			pos_surf.append(bin_points[max_y_index])
+			min_y_index = np.argmin(bin_points[:, 1])
+
+			u.append(bin_velocity[max_y_index])
+
+			y_topo = bin_points[min_y_index, 1]
+			y_surface = bin_points[max_y_index, 1]
+			h_local = y_surface - y_topo
+			h.append(y_surface)
+			pos_top.append(bin_points[max_y_index])
+			Fr.append(np.linalg.norm(bin_velocity[max_y_index]) / np.sqrt(g * h_local))
+			Head_abs.append(y_surface + np.linalg.norm(bin_velocity[max_y_index])**2/(2*g))
+			Head_rel.append(h_local + np.linalg.norm(bin_velocity[max_y_index])**2/(2*g))
 	
-	h = np.array(pos_surf)
-	u_surf = np.array(u_surf)
-	Fr = np.linalg.norm(u_surf, axis=1) / np.sqrt(g * (h[:, 1]))
+	h = np.asarray(pos_top)
+	u = np.asarray(u)
+	Fr = np.asarray(Fr)
+	Head_abs = np.asarray(Head_abs)
+	Head_rel = np.asarray(Head_rel)
+
 	
 	if plot:
 		fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
@@ -238,7 +239,7 @@ def extract_water_height(vtk_file, plot=False, save=False):
 			plt.savefig('Pictures/CH5_valid_test/free_surface/water_height_velocity_sph.pdf', dpi=300)
 		plt.show()
 
-	return pos, h, u_surf
+	return np.array(pos), np.array(h), np.array(u), np.array(Fr), np.array(Head_rel), np.array(Head_abs)
 
 
 def compute_theoretical_water_height(Q_init=0.18):
@@ -307,7 +308,7 @@ def compute_theoretical_water_height(Q_init=0.18):
 	h_all = h_all[indices]
 	Fr_all = Fr_all[indices]
 
-	return x_all, z_all, h_all, Fr_all
+	return x_all, z_all, h_all, Fr_all, H_amont, H_aval
 
 def annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False):
 	"""
@@ -362,19 +363,6 @@ def annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False):
 				z_all[outlet_region], 
 				z_all[outlet_region] + h_all[outlet_region], 
 				color='yellow', label= 'Outlet region',alpha=0.2)
-	
-	'''
-	# Add annotations for regions
-	ax.annotate('Inlet region', xy=(5, z_all[np.abs(x_all - 5).argmin()] + 
-			h_all[np.abs(x_all - 5).argmin()] + 0.1), fontsize=16)
-	
-	ax.annotate('Critical region', xy=(x_cr + 0.5, z_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 
-			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] + 0.1), fontsize=16)
-	
-	ax.annotate('Outlet region', xy=(x_ressaut + 2, z_all[np.abs(x_all - (x_ressaut + 2)).argmin()] + 
-			h_all[np.abs(x_all - (x_ressaut + 2)).argmin()] + 0.1), fontsize=16)
-	'''
-
 
 	
 	# Add annotation for x_cr
@@ -395,10 +383,6 @@ def annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False):
 			h_all[np.abs(x_all - (x_cr + 0.5)).argmin()] - 0.1), fontsize=20, 
 			bbox=dict(boxstyle="circle", fc="lightblue", ec="blue", alpha=0.7))
 	
-	# Add vertical lines for region boundaries
-	#ax.axvline(x=x_cr, color='red', linestyle='--', linewidth=1.5)
-	#ax.axvline(x=x_ressaut, color='red', linestyle='--', linewidth=1.5)
-	
 	# Plot configuration
 	ax.set_xlim(7, 13)
 	ax.set_xlabel('Distance x [m]', fontsize=14)
@@ -407,8 +391,6 @@ def annotate_hydraulic_regions(x_all, z_all, h_all, Fr_all, save=False):
 	ax.grid(True, alpha=0.3)
 	
 	# Add Froude number subplot
-
-	#plt.title('Hydraulic Flow Profile with Jump', fontsize=16)
 	plt.tight_layout()
 	
 	if save:
@@ -472,9 +454,6 @@ def plot_conjugate_height(x_all, z_all, h_all, Fr_all, save=False):
 	# Mark hydraulic jump location with a colored point
 	jump_height = h_all[ressaut_idx] + z_all[ressaut_idx]
 	ax.plot(x_ressaut, jump_height, 'ro', markersize=10, label=f'Hydraulic jump')
-	
-	# Add a vertical line at the jump location
-	#ax.axvline(x=x_ressaut, color='red', linestyle=':', linewidth=1.5)
 		
 	# Plot configuration
 	ax.set_xlabel('Distance x [m]', fontsize=14)
@@ -528,54 +507,159 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
 	plt.tight_layout()
 	if save:
 		plt.savefig("Pictures/CH5_valid_test/free_surface/water_height_last.pdf")
+
+def plot_Fr(x, x_th, Fr, Fr_th, save=False, savepath=None):
+
+	fig, ax = plt.subplots()
+	
+	ax.scatter(x, Fr, s=20, marker='o', color='blue')
+	ax.axhline(y=1, color='red', linestyle='--', linewidth=1.5, label="Fr = 1")
+	plt.plot(x_th, Fr_th, label='Theoretical Froude', color='magenta')
+	
+	ax.set_xlabel('Position x [m]')
+	ax.set_ylabel('Froude number Fr [-]')
+	ax.grid(True, linestyle='--', alpha=0.7)
+	ax.legend()
+	
+	plt.tight_layout()
+	
+	if save and savepath is None:
+		plt.savefig(f"{savepath}/Fr_number.pdf", dpi=300, bbox_inches='tight')
+	
+
+def plot_Head(x, H, H_inlet=0, H_outlet=0, save=False, 
+			savepath=None):
+	
+	fig, ax = plt.subplots()
+	x_array = np.asarray(x)
+	
+
+	x_jump = 11.6657
+	
+	ax.scatter(x_array, H, s=20, marker='o', color='blue', label="Total head")
+	
+
+	ax.axhline(y=H_inlet, xmin=0, xmax=(x_jump-x_array[0])/(x_array[-1]-x_array[0]), 
+			linestyle='--', color='red', linewidth=1.5, label=f"Inlet head ({H_inlet:.4f})")
+	ax.axhline(y=H_outlet, xmin=(x_jump-x_array[0])/(x_array[-1]-x_array[0]), xmax=1, 
+			linestyle='--', color='green', linewidth=1.5, label=f"Outlet head ({H_outlet:.4f})")
+	
+	ax.set_xlabel('Position x [m]')
+	ax.set_ylabel('Total head H [m]')
+	ax.grid(True, linestyle='--')
+	ax.legend(loc='upper right')
+	
+	plt.tight_layout()
+	
+	if save and savepath is not None:
+		plt.savefig(f"{savepath}/head_conservation.pdf", dpi=300, bbox_inches='tight')
+	
 		
-def check_hydrostatic(all_data, dt,
-					y_start, y_end, 
-					plot=False, save=False):
-	"""
-	Simple verification of hydrostatic pressure distribution.
-	Computes mean pressure for each y-value, performs linear regression,
-	and compares with theoretical hydrostatic pressure.
-	"""
-	# Extract data
-	p_rho2 = all_data['p_/_rho^2']
-	y_data = all_data["y"]
-	rho = all_data["density"]
+def check_hydrostatic(p_rho2_slices, rho_slices, y_start, y_end, plot=False, save=False, savepath=None):
+    """
+    Simple verification of hydrostatic pressure distribution.
+    Computes mean pressure for each y-value, performs linear regression,
+    and compares with theoretical hydrostatic pressure.
+    Calculates RMSE between regression-based pressure and theoretical pressure.
+    """
+    # Extract data
+    p_reg = []
+    p_raw = []
+    y_data = []
+    dt = p_rho2_slices[0]['dt']
+    y_range = np.linspace(y_start, y_end, 100)
+    slice_positions = []
+    slice_rmse = []
+    
+    for p_rho2, rho in zip(p_rho2_slices, rho_slices):
+        p_r2 = np.array(p_rho2['values'])
+        r = np.array(rho['values'])
+        y_data.append(np.array(p_rho2['coordinates']))
+        
+        # Calculer la pression
+        pressure = p_r2 * r/(dt*dt)
+        p_raw.append(pressure)
+        
+        # Faire la régression sur tout le tableau
+        slope, intercept, r_value, p_value, std_err = stats.linregress(np.array(p_rho2['coordinates']), pressure)
+        
+        # Calculer la ligne de régression
+        p_regression = slope * y_range + intercept
+        p_reg.append(p_regression)
+        
+        # Enregistrer la position de la tranche pour affichage ultérieur
+        slice_positions.append(p_rho2['position'])
 
-	p_reg = []
-	p_raw = []
-	
-	
-	for i in range(len(p_rho2)):
+    if plot:
+        plt.figure(figsize=(10, 6))
+        for y_val, p_raw_val, p_reg_val in zip(y_data, p_raw, p_reg):
+            plt.scatter(y_val, p_raw_val, s=1)
+            plt.plot(y_range, p_reg_val)
 
-		p_r2 = np.array(p_rho2[i])
-		r = np.array(rho[i])
-		p_raw.append(p_r2 * r/(dt*dt))
-		slope, intercept, r_value, p_value, std_err = stats.linregress(y_data[i], p_raw[i])
+    # Calcul de la pression moyenne issue des régressions
+    p_mean = np.mean(p_reg, axis=0)
+    
+    # Calcul de la pression théorique
+    g = 9.81  # gravitational acceleration
+    p_theoretical = 1000 * g * (y_range[::-1] - y_range[0])
+    
+    # Calcul du RMSE global
+    squared_errors = (p_mean - p_theoretical)**2
+    global_rmse = np.sqrt(np.mean(squared_errors))
+    
+    # Calcul du RMSE pour chaque tranche
+    for p_regression in p_reg:
+        tranche_squared_errors = (p_regression - p_theoretical)**2
+        tranche_rmse = np.sqrt(np.mean(tranche_squared_errors))
+        slice_rmse.append(tranche_rmse)
+    
+    if plot:
+        # Figure 1: Pression vs hauteur
+        plt.figure(figsize=(10, 6))
+        plt.plot(y_range, p_mean, 'k-', label='Mean Regression', linewidth=2)
+        plt.plot(y_range, p_theoretical, 'r--', label='Theoretical Hydrostatic Pressure', linewidth=2)
+        plt.xlabel('Hauteur y [m]')
+        plt.ylabel('Pression [Pa]')
+        plt.title(f'Pression (RMSE globale = {global_rmse:.3f} Pa)')
+        plt.legend()
+        plt.grid(True, alpha=0.7)
+        
+        # Figure 2: RMSE par tranche
+        plt.figure(figsize=(10, 6))
+        plt.plot(slice_positions, slice_rmse, 'o-', color='red')
+        plt.ylabel('RMSE [Pa]')
+        plt.xlabel('Position x [m]')
+        plt.title('RMSE par tranche')
+        plt.grid(True)
+        
+        plt.tight_layout()
+        
+        if save and savepath:
+            plt.savefig(savepath)
+        plt.show()
+    
+    return p_mean, p_theoretical, y_range, global_rmse, slice_rmse, slice_positions
 
-		y_range = np.linspace(y_start, y_end, 100)
-		p_reg.append(slope * y_range + intercept)
+def is_uniform(u_slices, save=False, savepath=None):
 
-	if plot:
+		std = np.zeros_like(u_slices)
+		dist = np.zeros_like(u_slices)
+		for i, u in enumerate(u_slices):
+			std[i] = np.std(u['values'])
+			dist[i] = u['position']
+
 		plt.figure()
-		for i in range(len(p_rho2)):
-			plt.scatter(y_data[i], p_raw[i], s=1)
-			plt.plot(y_range, p_reg[i])
-
-	p_mean = np.mean(p_reg, axis=0)
-	g = 9.81  # gravitational acceleration
-	p_theoretical =  1000 * g * y_range[::-1]
-	
-	if plot:
-		plt.plot(y_range, p_mean, 'k-', label='Mean Regression', linewidth=2)
-		plt.plot(y_range, p_theoretical, 'r--', label='Theoretical Hydrostatic Pressure', linewidth=2)
-		plt.xlabel('Hauteur y [m]')
-		plt.ylabel('Pression [Pa]')
+		plt.plot(dist, std, 'b-o')
+		plt.axhline(y=0, xmin=dist[0], xmax=dist[-1], color='red', linestyle='--', label='Target value')
+		plt.xlabel('Position x [m]')
+		plt.ylabel(r'Velocity std $\sigma_{u}$(x)')
 		plt.legend()
-		plt.grid(True, alpha=0.3)
-		
-		
-		plt.show()
+		plt.grid(True, alpha=0.7)
+		plt.tight_layout()
+
+		if save and savepath is not None:
+			plt.savefig(f'{savepath}velo_uniform.pdf', dpi=300)
+
 	
 
 def main():
@@ -588,7 +672,7 @@ def main():
 
 
 	# Create plot
-	fig, ax1 = plt.subplots(figsize=(10, 6))
+	fig, ax1 = plt.subplots()
 
 	# Plot free surface and topography
 	#ax1.plot(x_all, h_all + z_all, label='Free surface')

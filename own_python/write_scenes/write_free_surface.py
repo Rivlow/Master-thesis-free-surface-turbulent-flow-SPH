@@ -22,7 +22,7 @@ def main():
 	output_path = "SPlisHSPlasH/bin/output/free_surface"
 
 	#-----------------------------#
-	#	SIMULATION PARAMETERS	#
+	#    SIMULATION PARAMETER     #
 	#-----------------------------#
 	
 	# Simulation time and step
@@ -33,7 +33,7 @@ def main():
 	
 
 	# Physical parameters
-	r = 10 * (mm)               
+	r = 4 * (mm)               
 	U_0 = 0.36 * (m/s)         
 	g = 9.81 * (m/s**2)
 	rho_0 = 1000 * (kg/m**3)
@@ -60,7 +60,7 @@ def main():
 	#------Viscosity------#
 	nu = 0                    # Kinematic viscosity
 	viscosityMethod = 0       # No viscosity
-	viscosity_boundary = 0.0  # Boundary viscosity
+	viscosityBoundary = 0.0  # Boundary viscosity
 
 	#------XSPH------#
 	xsph_fluid = 0.04
@@ -237,7 +237,7 @@ def main():
 			# Viscosity parameters
 			"viscosityMethod": viscosityMethod,
 			"viscosity": nu,
-			"viscosityBoundary": viscosity_boundary,
+			"viscosityBoundary": viscosityBoundary,
 			
 			# XSPH parameters
 			"xsph": xsph_fluid,
@@ -317,7 +317,7 @@ def main():
 			clean_files(output_path)
 			print('Output folder cleaned')
 		
-		write_summary(summary_path, data_save)
+		write_summary_file(data, output_path)
 
 		# Ensure directory exists
 		os.makedirs(os.path.dirname(json_path), exist_ok=True)

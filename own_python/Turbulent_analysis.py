@@ -7,7 +7,7 @@ import sys
 import os
 
 # Configuration du style des graphiques
-SMALL_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 6, 16, 18
+SMALL_SIZE, MEDIUM_SIZE, BIGGER_SIZE = 14, 26, 26
 plt.rc('font', size=SMALL_SIZE)
 plt.rc('axes', titlesize=MEDIUM_SIZE, labelsize=MEDIUM_SIZE)
 plt.rc('xtick', labelsize=MEDIUM_SIZE)
@@ -27,7 +27,7 @@ from validation_test.final import *
 # Units
 kg = 1
 m = 1
-mm = 1e-3*m
+mm = (1e-3) * (m)
 s = 1
 g = 9.81 * (m/s**2)
 
@@ -36,108 +36,54 @@ def main():
 	U_0 = 5 * (m/s)
 	nu = 1e-6 * (m**2/s)
 	rho = 1e3 * (kg/m**3)
-	D = 2* 1.615 * (m)
+	D = 2* 1.97 * (m)
 
-	r = 4 * (mm)
+	r = 20 * (mm)
 	particle = 2*r
 
-	vtk_folder = "my_output/local/turbulent_pipe/r_004"
-	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=400)
-	vtk_file = all_vtk[-1]
+	vtk_folder = "my_output/local/turbulent_pipe/r_20mm"
+	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=2150)
+	last_vtk = all_vtk[-1]
+	savepath = 'Pictures/CH5_valid_test/turbulent'
+	configure_latex()
 
-	#plot_vtk(vtk_file, mask=None, attribute='velocity')
+	plot_vtk(last_vtk, mask=None, attribute='velocity', is_plt=True, save=True, savepath=savepath+'/turb_velo')
+
+
 	common_mult = {
-		'vtk_file': vtk_file,
-		'plane': 'xy',
-		'axis': 'x',
-		'along': None,
+		'vtk_file': last_vtk,
 		'thickness': 5*particle,
 	}
 
 	common_single = {
 		'vtk_files': all_vtk,
-		'plane': 'xy',
-		'axis': 'x',
-		'fixed_coord': 15 * (m),
-		'thickness': 5*particle,
+		'fixed_coord': 25 * (m),
+		'thickness': 2*particle,
+
 	}
 	
-	# It is assumed outputs at a single timestep
-	u_slices  = get_multiple_slices(
-		**common_mult,
-		attribute='velocity',
-		component=0  
-	)
+	#-----------------------------------------------------------#
+	# Get attribute over distance (assumption: unique timestep) #
+	#-----------------------------------------------------------#
+	#u_center  = get_multiple_slices(**common_mult, attribute='velocity', mean=True, trans_val=[-8*r, 8*r], along=[1, 45], plot=False, save=False, savepath=savepath+"/u_center")
+	u_mult  = get_multiple_slices(**common_mult, attribute='velocity', along=[0, 46], plot=False, save=False, savepath=savepath+"/u")
+	rho_x_mult  = get_multiple_slices(**common_mult, attribute='density', along=[0, 46], plot=False, save=False, savepath=savepath+"/rho")
+	rho_y_mult  = get_multiple_slices(**common_mult, attribute='density', axis='y', trans_val=[0, 46], plot=False, save=False, savepath=savepath+"/rho")
+	Q_v, Q_m = compute_flow_rate(U_0*D, 1000, u_mult, rho_x_mult, plot=False, save=False, savepath=savepath)
 
-	rho_slices  = get_multiple_slices(
-		**common_mult,
-		attribute='density'
-	)
+	#-----------------------------------------------------------#
+	#                  Get attribute over time                  #
+	#-----------------------------------------------------------#
+	u_single = get_single_slice(**common_single, attribute='velocity', plot=False, save=False, savepath="/rho")
+	#drhodx, _ = spatial_derivative(rho_x_mult, 'x', plot=True, save=True, savepath=savepath+"/rho_x")
+	#drhody, _ = spatial_derivative(rho_y_mult, 'y', plot=True, save=False, savepath=savepath+"/rho_y")
 
-	rho_single = get_single_slice(
-		**common_single, 
-		attribute='density')
-	
 
-	
-	Q_v, Q_m = compute_flow_rate(U_0*D, 1000, 
-							  u_slices, rho_slices, 
-							  plot=True, save=False, savepath = 'Pictures/CH5_valid_test/turbulent')
+	#_, _ = time_derivative(mass_single, plot=True, save=False, savepath=savepath+"/mass")
+	#analyze_particle_distribution(last_vtk, 15, delta_x=5*particle, n_bins=80, plot=True, save=True, savepath=savepath)
+	#plot_particles_with_selection_rectangle(all_vtk, plane='xy', axis='x', fixed_coord=15, thickness=5*particle, trans_val=[-1.6, 1.6], save=True, savepath=savepath)
+	fit_ghe_model(u_single, 1.615, plot=False, save=False)
 
-	du_dx, pos = spatial_derivative(u_slices)
-	drho_dt, times = time_derivative(rho_single)
-
-	
-	plt.figure(figsize=(12, 8))
-
-	plt.plot(pos, du_dx, 'r-o')
-	plt.axhline(y=0, color='k', linestyle='--')  # Ligne horizontale à y=0
-	plt.title('Dérivée spatiale de la vitesse')
-	plt.xlabel('Position x')
-	plt.ylabel('du_x/dx')
-	plt.grid(True)
-
-	plt.tight_layout()
-
-	plt.figure(figsize=(12, 8))
-
-	plt.plot(times, drho_dt, 'r-o')
-	plt.axhline(y=0, color='k', linestyle='--')  # Ligne horizontale à y=0
-	plt.title('Dérivée temporelle de rho ')
-	plt.xlabel('temps t')
-	plt.ylabel('du_rho/ddt')
-	plt.grid(True)
-
-	plt.tight_layout()
-	
-	plt.show()
-	
-
-	#inside_mask, rectangle = find_particles_in_rectangle(last_vtk.points, x_min, y_min, x_max, y_max)
-	#projected_points, projected_attributes, vertical_line = project_particles(last_vtk, inside_mask, rectangle)
-	#visualize_results(last_vtk, inside_mask, projected_points, rectangle, vertical_line)
-	'''
-	single_data = vtk_data, attributes, dimensions, save_path,
-							x, y_min, y_max,
-							num_slices, slice_width, 
-							remove=False, plot=False, save=False)
-	'''
-	#fit_ghe_model(u_all, y_all, y_min, plot=True, save=True)
-
-	'''
-	x_start, x_end = 1, 45
-	u_all, y_all = multiple_slices(steady_vtk[-1],
-										x_start=x_start, x_end=x_end,
-										num_slices=100,
-										y_min=y_min, y_max=y_max,
-										slice_width=2*particle,
-										plot=False,
-										save=False)
-
-	x_span = np.linspace(x_start, x_end, len(u_all))
-	center_line(x_span, u_all, save=True)
-	'''
-	#integrate_slice(Q_init, x_span, u_all, y_all, save=False)
 
 	plt.show()
 

@@ -449,6 +449,7 @@ def main():
 	os.makedirs(os.path.dirname(json_path), exist_ok=True)
 
 	# Write JSON file
+	write_summary_file(data, output_path)
 	with open(json_path, 'w') as json_file:
 		json.dump(data, json_file, indent=4)
 

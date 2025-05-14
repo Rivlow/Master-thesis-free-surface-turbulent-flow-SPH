@@ -1,4 +1,5 @@
 import numpy as np
+import json
 import os
 import shutil
 from matplotlib import pyplot as plt
@@ -15,7 +16,29 @@ def clean_files(directory):
 	if os.path.exists(directory):
 		shutil.rmtree(directory)
 	os.makedirs(directory, exist_ok=True)
+      
+def write_summary_file(data, output_path):
 	
+	# Output file path
+	output_file = os.path.join(output_path, "simulation_summary.txt")
+	
+	with open(output_file, "w") as f:
+		f.write("=== CONFIGURATION ===\n")
+		for key, value in data["Configuration"].items():
+			f.write(f"{key}: {value}\n")
+		
+		f.write("\n")
+		
+		# Write the Materials section
+		f.write("=== MATERIALS ===\n")
+		for material in data["Materials"]:
+			f.write("Material ID: " + material["id"] + "\n")
+			for key, value in material.items():
+				if key != "id":  # ID already displayed
+					f.write(f"  {key}: {value}\n")
+			f.write("\n")
+		
+
 def calculate_emitter_particle_positions(emitter_pos, width, height, particle_radius):
 	# Calculate particle diameter
 	diam = 2.0 * particle_radius

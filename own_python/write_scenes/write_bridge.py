@@ -30,7 +30,7 @@ def main():
 	maxEmitterParticles = 10000000
 
 	# Physical parameters
-	r = 2.5* (mm)                # Particle radius
+	r = 3 * (mm)                # Particle radius
 	particle = 2*r            # Particle diameter
 	U_0 = 0.15 *(m/s)            # Initial velocity
 	Fr = isFluvial(False)
@@ -573,6 +573,7 @@ def main():
 
 	# Ensure directory exists
 	os.makedirs(os.path.dirname(json_path), exist_ok=True)
+	write_summary_file(data, output_path)
 
 	# Write JSON file
 	with open(json_path, 'w') as json_file:
