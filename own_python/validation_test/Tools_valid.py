@@ -6,6 +6,7 @@ import pyvista as pv
 from matplotlib.colors import Normalize
 import numba as nb
 import matplotlib.patches as patches
+from scipy.spatial import cKDTree
 
 
 # Local imports
@@ -894,69 +895,23 @@ def get_global_bounds(vtk_files, dimensions='3D', bounding=None):
 	return [x_glob_min, y_glob_min], [x_glob_max, y_glob_max]
 
 
-def create_grid(vtk_files, bounds, nb_elem, dimensions='3D', plane='xy', r=None):
-	"""
-	Crée une grille pour analyser des données VTK avec stockage des particules voisines aux bords.
+def create_grid(vtk_file, bounds, L_cell, dimensions='2D', plane='xy', r=None):
 	
-	Args:
-		vtk_files: Un fichier VTK ou une liste de fichiers VTK à traiter
-		bounds: Les limites de la grille
-		nb_elem: Nombre d'éléments par dimension
-		dimensions: '3D' ou '2D'
-		plane: Plan à utiliser si dimensions='2D', l'un de 'xy', 'xz', 'yz'
-		r: Paramètre de rayon pour le calcul des voisinages
-	"""
-	
-	if not isinstance(vtk_files, list):
-		vtk_files = [vtk_files]
-	
-	# Vérification du plan pour le mode 2D
+	# Check 2D
 	if dimensions == '2D' and plane not in ['xy', 'xz', 'yz']:
-		raise ValueError("Le plan doit être l'un de 'xy', 'xz', 'yz' en mode 2D")
+		raise ValueError("PLane must be 'xy', 'xz', 'yz' (2D)")
 	
-	# Préparer les limites en fonction du format d'entrée
-	if isinstance(bounds, dict):
-		# Format dictionnaire (généralement pour 2D)
-		if dimensions == '3D':
-			raise ValueError("Pour le mode 3D, les bornes doivent être au format [(x_min, y_min, z_min), (x_max, y_max, z_max)]")
-			
-		# Créer des limites 3D complètes à partir du dictionnaire 2D
-		min_bounds = [0, 0, 0]
-		max_bounds = [1, 1, 1]  # Valeurs par défaut pour les dimensions non spécifiées
-		
-		if plane == 'xy':
-			if all(k in bounds for k in ['x_min', 'y_min', 'x_max', 'y_max']):
-				min_bounds[0], min_bounds[1] = bounds['x_min'], bounds['y_min']
-				max_bounds[0], max_bounds[1] = bounds['x_max'], bounds['y_max']
-			else:
-				raise ValueError("Les bornes pour le plan 'xy' doivent contenir 'x_min', 'y_min', 'x_max', 'y_max'")
-		
-		elif plane == 'xz':
-			if all(k in bounds for k in ['x_min', 'z_min', 'x_max', 'z_max']):
-				min_bounds[0], min_bounds[2] = bounds['x_min'], bounds['z_min']
-				max_bounds[0], max_bounds[2] = bounds['x_max'], bounds['z_max']
-			else:
-				raise ValueError("Les bornes pour le plan 'xz' doivent contenir 'x_min', 'z_min', 'x_max', 'z_max'")
-		
-		elif plane == 'yz':
-			if all(k in bounds for k in ['y_min', 'z_min', 'y_max', 'z_max']):
-				min_bounds[1], min_bounds[2] = bounds['y_min'], bounds['z_min']
-				max_bounds[1], max_bounds[2] = bounds['y_max'], bounds['z_max']
-			else:
-				raise ValueError("Les bornes pour le plan 'yz' doivent contenir 'y_min', 'z_min', 'y_max', 'z_max'")
-	
+	# Check format [(x_min, y_min, z_min), (x_max, y_max, z_max)]
 	elif isinstance(bounds, list) and len(bounds) == 2:
-		# Format liste/tuple standard [(x_min, y_min, z_min), (x_max, y_max, z_max)]
+
 		min_bounds, max_bounds = bounds
-		
-		# Vérifier si les bornes sont complètes selon la dimension
+
 		if dimensions == '3D' and (len(min_bounds) < 3 or len(max_bounds) < 3):
-			raise ValueError("Pour le mode 3D, les bornes doivent contenir x, y et z")
+			raise ValueError("3D: bounds must contain x, y and z")
 		
-		# Pour 2D, adapter selon le plan si nécessaire
 		if dimensions == '2D' and len(min_bounds) == 2 and len(max_bounds) == 2:
-			# Convertir des bornes 2D en 3D selon le plan
-			min_temp, max_temp = [0, 0, 0], [1, 1, 1]
+			# 2D -> 3D bounding to use KDTree later
+			min_temp, max_temp = [0, 0, 0], [0, 0, 0]
 			
 			if plane == 'xy':
 				min_temp[0], min_temp[1] = min_bounds
@@ -970,523 +925,464 @@ def create_grid(vtk_files, bounds, nb_elem, dimensions='3D', plane='xy', r=None)
 			
 			min_bounds, max_bounds = min_temp, max_temp
 	else:
-		raise ValueError("Format de bornes non pris en charge. Utilisez [(x_min, y_min, z_min), (x_max, y_max, z_max)] ou un dictionnaire adapté au plan 2D")
+		raise ValueError("Format bounds warning. Use[(x_min, y_min, z_min), (x_max, y_max, z_max)]")
 	
-	# Create coordinate spans
-	x_span = np.linspace(min_bounds[0], max_bounds[0], nb_elem+1)
-	y_span = np.linspace(min_bounds[1], max_bounds[1], nb_elem+1)
-	z_span = np.linspace(min_bounds[2], max_bounds[2], nb_elem+1)
+	# Compute nb_elem in each dir
+	DOM_x = max_bounds[0] - min_bounds[0]
+	DOM_y = max_bounds[1] - min_bounds[1]
+	DOM_z = max_bounds[2] - min_bounds[2]
 	
-	# Créer le maillage en fonction de la dimension et du plan
-	if dimensions == '3D':
-		X, Y, Z = np.meshgrid(x_span, y_span, z_span)
-	else:  # 2D
-		if plane == 'xy':
-			X, Y = np.meshgrid(x_span, y_span)
-		elif plane == 'xz':
-			X, Z = np.meshgrid(x_span, z_span)
-		elif plane == 'yz':
-			Y, Z = np.meshgrid(y_span, z_span)
+	nb_elem_x = int(np.ceil(DOM_x / L_cell))
+	nb_elem_y = int(np.ceil(DOM_y / L_cell))
+	nb_elem_z = int(np.ceil(DOM_z / L_cell))
 	
-	# Calculate boundaries and cell sizes
+	# Adjust DOM_size if offset (if nb_elem_i* L_cell > DOM_i)
+	max_bounds[0] = min_bounds[0] + nb_elem_x * L_cell
+	max_bounds[1] = min_bounds[1] + nb_elem_y * L_cell
+	max_bounds[2] = min_bounds[2] + nb_elem_z * L_cell
+	
+	nb_elems = (nb_elem_x, nb_elem_y, nb_elem_z)
+	print(f"Number of cells in (x,y,z) dir: {nb_elems}")
+	
+	x_span = np.linspace(min_bounds[0], max_bounds[0], nb_elem_x+1)
+	y_span = np.linspace(min_bounds[1], max_bounds[1], nb_elem_y+1)
+	z_span = np.linspace(min_bounds[2], max_bounds[2], nb_elem_z+1)
+
 	x_min, y_min, z_min = x_span[0], y_span[0], z_span[0]
 	x_max, y_max, z_max = x_span[-1], y_span[-1], z_span[-1]
-	dx, dy, dz = (x_max - x_min) / nb_elem, (y_max - y_min) / nb_elem, (z_max - z_min) / nb_elem
+	dx = L_cell
+	dy = L_cell
+	dz = L_cell
 	
-	# Si r n'est pas spécifié, on utilise la taille de cellule
-	if r is None:
-		r = min(dx, dy) / 4 if dimensions == '2D' else min(dx, dy, dz) / 4
-	
-	# Initialize grid cells dictionary with standard structure (just particles)
 	if dimensions == '3D':
 		grid_cells = {cell_idx: {
 			'particles': [],
-			'border_neighbors': {
-				'left': [], 'right': [], 'bottom': [], 'top': [], 'front': [], 'back': []
-			}
-		} for cell_idx in np.ndindex((nb_elem, nb_elem, nb_elem))}
+		} for cell_idx in np.ndindex((nb_elems[0], nb_elems[1], nb_elems[2]))}
 	else:  # 2D
 		grid_cells = {cell_idx: {
 			'particles': [],
-			'border_neighbors': {
-				'left': [], 'right': [], 'bottom': [], 'top': []
-			}
-		} for cell_idx in np.ndindex((nb_elem, nb_elem))}
+		} for cell_idx in np.ndindex((nb_elems[0], nb_elems[1]))}
 	
 	# Process all particles at once
 	total_particles = 0
 	skipped_particles = 0
 	
-	# ÉTAPE 1: Assigner chaque particule à sa cellule
-	for vtk_idx, vtk in enumerate(vtk_files):
-		points = np.array(vtk.points)
-		total_particles += len(points)
-		
-		# Filter points within bounds
-		if dimensions == '3D':
+	points = np.array(vtk_file.points)
+	total_particles = len(points)
+	
+	# Filter points within bounds
+	if dimensions == '3D':
+		mask = ((points[:, 0] >= x_min) & (points[:, 0] <= x_max) & 
+				(points[:, 1] >= y_min) & (points[:, 1] <= y_max) & 
+				(points[:, 2] >= z_min) & (points[:, 2] <= z_max))
+	else:  # 2D
+		if plane == 'xy':
 			mask = ((points[:, 0] >= x_min) & (points[:, 0] <= x_max) & 
-					(points[:, 1] >= y_min) & (points[:, 1] <= y_max) & 
+					(points[:, 1] >= y_min) & (points[:, 1] <= y_max))
+		elif plane == 'xz':
+			mask = ((points[:, 0] >= x_min) & (points[:, 0] <= x_max) & 
 					(points[:, 2] >= z_min) & (points[:, 2] <= z_max))
-		else:  # 2D
-			if plane == 'xy':
-				mask = ((points[:, 0] >= x_min) & (points[:, 0] <= x_max) & 
-						(points[:, 1] >= y_min) & (points[:, 1] <= y_max))
-			elif plane == 'xz':
-				mask = ((points[:, 0] >= x_min) & (points[:, 0] <= x_max) & 
-						(points[:, 2] >= z_min) & (points[:, 2] <= z_max))
-			elif plane == 'yz':
-				mask = ((points[:, 1] >= y_min) & (points[:, 1] <= y_max) & 
-						(points[:, 2] >= z_min) & (points[:, 2] <= z_max))
-		
-		valid_points = points[mask]
-		valid_indices = np.where(mask)[0]
-		skipped_particles += len(points) - len(valid_points)
-		
-		# Calculate cell indices for all valid points
-		if dimensions == '3D':
-			i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elem - 1)
-			j = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elem - 1)
-			k = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elem - 1)
-			
-			for idx, (i_val, j_val, k_val) in enumerate(zip(i, j, k)):
-				grid_cells[(i_val, j_val, k_val)]['particles'].append((vtk_idx, valid_indices[idx]))
-		
-		else:  # 2D
-			if plane == 'xy':
-				i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elem - 1)
-				j = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elem - 1)
-			elif plane == 'xz':
-				i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elem - 1)
-				j = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elem - 1)
-			elif plane == 'yz':
-				i = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elem - 1)
-				j = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elem - 1)
-			
-			for idx, (i_val, j_val) in enumerate(zip(i, j)):
-				grid_cells[(i_val, j_val)]['particles'].append((vtk_idx, valid_indices[idx]))
+		elif plane == 'yz':
+			mask = ((points[:, 1] >= y_min) & (points[:, 1] <= y_max) & 
+					(points[:, 2] >= z_min) & (points[:, 2] <= z_max))
 	
-	# ÉTAPE 2: Pour chaque cellule, identifier les particules des cellules voisines
-	# pour les bords correspondants
-	if dimensions == '2D':
-		for i in range(nb_elem):
-			for j in range(nb_elem):
-				# Particules de la cellule courante
-				self_particles = grid_cells[(i, j)]['particles'].copy()
-				
-				# Bord gauche: utiliser les particules de la cellule à gauche (i-1,j) ET de la cellule elle-même
-				if i > 0:
-					grid_cells[(i, j)]['border_neighbors']['left'] = grid_cells[(i-1, j)]['particles'].copy() + self_particles
-				else:
-					grid_cells[(i, j)]['border_neighbors']['left'] = self_particles
-				
-				# Bord droit: utiliser les particules de la cellule à droite (i+1,j) ET de la cellule elle-même
-				if i < nb_elem - 1:
-					grid_cells[(i, j)]['border_neighbors']['right'] = grid_cells[(i+1, j)]['particles'].copy() + self_particles
-				else:
-					grid_cells[(i, j)]['border_neighbors']['right'] = self_particles
-				
-				# Bord bas: utiliser les particules de la cellule du bas (i,j-1) ET de la cellule elle-même
-				if j > 0:
-					grid_cells[(i, j)]['border_neighbors']['bottom'] = grid_cells[(i, j-1)]['particles'].copy() + self_particles
-				else:
-					grid_cells[(i, j)]['border_neighbors']['bottom'] = self_particles
-				
-				# Bord haut: utiliser les particules de la cellule du haut (i,j+1) ET de la cellule elle-même
-				if j < nb_elem - 1:
-					grid_cells[(i, j)]['border_neighbors']['top'] = grid_cells[(i, j+1)]['particles'].copy() + self_particles
-				else:
-					grid_cells[(i, j)]['border_neighbors']['top'] = self_particles
-
-	else:  # 3D - code pour 3D
-		for i in range(nb_elem):
-			for j in range(nb_elem):
-				for k in range(nb_elem):
-					# Particules de la cellule courante
-					self_particles = grid_cells[(i, j, k)]['particles'].copy()
-					
-					# Bord gauche (direction -x): particules de (i-1,j,k) + cellule elle-même
-					if i > 0:
-						grid_cells[(i, j, k)]['border_neighbors']['left'] = grid_cells[(i-1, j, k)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['left'] = self_particles
-					
-					# Bord droit (direction +x): particules de (i+1,j,k) + cellule elle-même
-					if i < nb_elem - 1:
-						grid_cells[(i, j, k)]['border_neighbors']['right'] = grid_cells[(i+1, j, k)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['right'] = self_particles
-					
-					# Bord bas (direction -y): particules de (i,j-1,k) + cellule elle-même
-					if j > 0:
-						grid_cells[(i, j, k)]['border_neighbors']['bottom'] = grid_cells[(i, j-1, k)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['bottom'] = self_particles
-					
-					# Bord haut (direction +y): particules de (i,j+1,k) + cellule elle-même
-					if j < nb_elem - 1:
-						grid_cells[(i, j, k)]['border_neighbors']['top'] = grid_cells[(i, j+1, k)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['top'] = self_particles
-					
-					# Bord arrière (direction -z): particules de (i,j,k-1) + cellule elle-même
-					if k > 0:
-						grid_cells[(i, j, k)]['border_neighbors']['back'] = grid_cells[(i, j, k-1)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['back'] = self_particles
-					
-					# Bord avant (direction +z): particules de (i,j,k+1) + cellule elle-même
-					if k < nb_elem - 1:
-						grid_cells[(i, j, k)]['border_neighbors']['front'] = grid_cells[(i, j, k+1)]['particles'].copy() + self_particles
-					else:
-						grid_cells[(i, j, k)]['border_neighbors']['front'] = self_particles
+	valid_points = points[mask]
+	valid_indices = np.where(mask)[0]
+	skipped_particles = len(points) - len(valid_points)
 	
-	print(f"Particules totales: {total_particles}")
-	print(f"Particules ignorées (hors limites): {skipped_particles} ({skipped_particles/total_particles*100:.2f}%)")
-	print(f"Particules dans la grille: {total_particles - skipped_particles}")
+	# Calculate cell indices for all valid points
+	if dimensions == '3D':
+		i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elems[0] - 1)
+		j = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elems[1] - 1)
+		k = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elems[2] - 1)
+		
+		for idx, (i_val, j_val, k_val) in enumerate(zip(i, j, k)):
+			grid_cells[(i_val, j_val, k_val)]['particles'].append(valid_indices[idx])
+	
+	else:  # 2D
+		if plane == 'xy':
+			i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elems[0] - 1)
+			j = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elems[1] - 1)
+		elif plane == 'xz':
+			i = np.minimum(((valid_points[:, 0] - x_min) / dx).astype(int), nb_elems[0] - 1)
+			j = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elems[2] - 1)
+		elif plane == 'yz':
+			i = np.minimum(((valid_points[:, 1] - y_min) / dy).astype(int), nb_elems[1] - 1)
+			j = np.minimum(((valid_points[:, 2] - z_min) / dz).astype(int), nb_elems[2] - 1)
+		
+		for idx, (i_val, j_val) in enumerate(zip(i, j)):
+			grid_cells[(i_val, j_val)]['particles'].append(valid_indices[idx])
+	
+	print(f"Total number of particles: {total_particles}")
+	print(f"Skipped particles (out of bounds): {skipped_particles} ({skipped_particles/total_particles*100:.2f}%)")
 	
 	# Create grid object with all properties
 	grid = {
-		'nb_elem': nb_elem, 'cells': grid_cells, 
+		'nb_elems': nb_elems, 'cells': grid_cells, 
 		'dimensions': dimensions,
 		'total_particles': total_particles,
 		'included_particles': total_particles - skipped_particles,
 		'skipped_particles': skipped_particles,
-		'neighbor_radius': r
+		'L_cell':L_cell
 	}
 	
-	# Ajouter les propriétés pour chaque dimension
-	grid.update({
-		'x_span': x_span, 'x_min': x_min, 'x_max': x_max, 'dx': dx
-	})
-	
-	grid.update({
-		'y_span': y_span, 'y_min': y_min, 'y_max': y_max, 'dy': dy
-	})
-	
-	grid.update({
-		'z_span': z_span, 'z_min': z_min, 'z_max': z_max, 'dz': dz
-	})
-	
-	# Ajouter les propriétés spécifiques à la dimension
 	if dimensions == '3D':
-		grid.update({'X': X, 'Y': Y, 'Z': Z})
+		xc = x_span[:-1] + L_cell/2
+		yc = y_span[:-1] + L_cell/2
+		zc = z_span[:-1] + L_cell/2
+		X, Y, Z = np.meshgrid(xc, yc, zc, indexing='ij')
+		cell_centers = np.c_[X.ravel(), Y.ravel(), Z.ravel()]
+		shape = grid['nb_elems']
+
 	else:  # 2D
 		grid['plane'] = plane
 		if plane == 'xy':
-			grid.update({'X': X, 'Y': Y})
+			xc = x_span[:-1] + L_cell/2
+			yc = y_span[:-1] + L_cell/2
+			X, Y = np.meshgrid(xc, yc, indexing='ij')
+			cell_centers = np.c_[X.ravel(), Y.ravel(), np.full(X.size, z_min)]
+			shape = grid['nb_elems'][:2]
 		elif plane == 'xz':
-			grid.update({'X': X, 'Z': Z})
+			xc = x_span[:-1] + L_cell/2
+			zc = z_span[:-1] + L_cell/2
+			X, Z = np.meshgrid(xc, zc, indexing='ij')
+			cell_centers = np.c_[X.ravel(), np.full(X.size, y_min), Z.ravel()]
+			shape = (grid['nb_elems'][0], grid['nb_elems'][2])
 		elif plane == 'yz':
-			grid.update({'Y': Y, 'Z': Z})
+			yc = y_span[:-1] + L_cell/2
+			zc = z_span[:-1] + L_cell/2
+			Y, Z = np.meshgrid(yc, zc, indexing='ij')
+			cell_centers = np.c_[np.full(Y.size, x_min), Y.ravel(), Z.ravel()]
+			shape = (grid['nb_elems'][1], grid['nb_elems'][2])
+
+	grid['cell_centers'] = cell_centers
+	grid['cell_shape'] = shape
 
 	return grid
 
-
-def compute_grid_values(grid, vtk_file, attribute_name, r, W, component=None):
-	"""
-	Calcule les valeurs aux interfaces des cellules en utilisant les voisinages pré-calculés.
-	Fonctionne pour les grilles 2D et 3D.
-	
-	Args:
-		grid: Grille créée par create_grid avec les voisinages aux bords
-		vtk_file: Fichier VTK contenant les particules
-		attribute_name: Nom de l'attribut à interpoler
-		r: Rayon du kernel d'interpolation
-		W: Fonction de kernel SPH
-		component: Composante à extraire si l'attribut est vectoriel (None = toutes)
-	"""
-	nb_elem = grid['nb_elem']
+import itertools
+def compute_grid_values(grid, vtk_file, attribute_name, h, W, component=None):
 	dimensions = grid['dimensions']
+	plane = grid.get('plane', None)
+	dim = 3 if dimensions == '3D' else 2
+	shape = grid['cell_shape']
 	
-	# Correspondances des noms d'interfaces
-	interface_mapping_2d = {
-		'left': 'left',    # direction -x
-		'right': 'right',  # direction +x
-		'down': 'bottom',  # direction -y
-		'up': 'top'        # direction +y
+	# Collecte des particules de la grille
+	particle_indices = list(itertools.chain.from_iterable(
+		cell['particles'] for cell in grid['cells'].values()
+	))
+	if not particle_indices:
+		grid['cell_values'] = np.full(shape, np.nan)
+		return grid
+	
+	all_positions = vtk_file.points[particle_indices]
+	all_attributes = vtk_file.point_data[attribute_name][particle_indices]
+	
+	if component is not None:
+		if isinstance(all_attributes, np.ndarray) and all_attributes.ndim > 1:
+			all_attributes = all_attributes[:, component]
+		else:
+			all_attributes = all_attributes
+	
+	# Find neighbours of cells centers (KDTree)
+	tree = cKDTree(all_positions)
+	cell_centers = grid['cell_centers']
+	indices = tree.query_ball_point(cell_centers, h) # 
+	
+	# Flatten neighbours idx
+	cell_idx = []
+	particle_idx = []
+	for i, neighbors in enumerate(indices):
+		cell_idx.extend([i] * len(neighbors))
+		particle_idx.extend(neighbors)
+	if not particle_idx:
+		grid['cell_values'] = np.full(shape, np.nan)
+		return grid
+	
+	cell_idx = np.array(cell_idx)
+	particle_idx = np.array(particle_idx)
+	
+	# Pre compute valid neighbouring particles distance 
+	displacements = cell_centers[cell_idx] - all_positions[particle_idx]
+	dists = np.linalg.norm(displacements, axis=1)
+	valid_mask = dists <= h
+	cell_idx_valid = cell_idx[valid_mask]
+	particle_idx_valid = particle_idx[valid_mask]
+	dists_valid = dists[valid_mask]
+	
+	if len(dists_valid) == 0:
+		grid['cell_values'] = np.full(shape, np.nan)
+		return grid
+	
+	# SPH interpolation
+	weights_valid = W(dists_valid, h)
+	sum_weights = np.bincount(cell_idx_valid, weights=weights_valid, minlength=len(cell_centers))
+	valid_cells = sum_weights >= 1e-12
+	
+	is_vector = all_attributes.ndim > 1 and component is None
+	if is_vector:
+		D = all_attributes.shape[1]
+		weighted_sums = np.zeros((len(cell_centers), D))
+		valid_attrs = all_attributes[particle_idx_valid]
+		weighted_attrs = valid_attrs * weights_valid[:, np.newaxis]
+		np.add.at(weighted_sums, cell_idx_valid, weighted_attrs)
+		averages = np.full((len(cell_centers), D), np.nan)
+		averages[valid_cells] = weighted_sums[valid_cells] / sum_weights[valid_cells, np.newaxis]
+		result = averages.reshape(shape + (D,))
+	else:
+		weighted_sums = np.bincount(cell_idx_valid, weights=all_attributes[particle_idx_valid] * weights_valid, minlength=len(cell_centers))
+		averages = np.full(len(cell_centers), np.nan)
+		averages[valid_cells] = weighted_sums[valid_cells] / sum_weights[valid_cells]
+		result = averages.reshape(shape)
+	
+	grid['cell_values'] = result
+	grid['cell_values_info'] = {
+		'attribute': attribute_name,
+		'component': component
 	}
-	
-	interface_mapping_3d = {
-		'left': 'left',     # direction -x
-		'right': 'right',   # direction +x
-		'down': 'bottom',   # direction -y
-		'up': 'top',        # direction +y
-		'back': 'back',     # direction -z
-		'front': 'front'    # direction +z
-	}
-	
-	# Créer le dictionnaire des clés pour chaque direction
-	value_keys = {}
-	if dimensions == '2D':
-		for direction in ['left', 'right', 'up', 'down']:
-			suffix = f"_{component}" if component is not None else ""
-			value_keys[direction] = f"{attribute_name}{suffix}_{direction}"
-	else:  # 3D
-		for direction in ['left', 'right', 'up', 'down', 'front', 'back']:
-			suffix = f"_{component}" if component is not None else ""
-			value_keys[direction] = f"{attribute_name}{suffix}_{direction}"
-	
-	# Déterminer si l'attribut est vectoriel et son nombre de composantes
-	is_vector = False
-	num_components = 1
-	
-	if hasattr(vtk_file, 'point_data') and attribute_name in vtk_file.point_data:
-		sample_attr = vtk_file.point_data[attribute_name]
-		if len(sample_attr.shape) > 1 and sample_attr.shape[1] > 1:
-			is_vector = True
-			num_components = sample_attr.shape[1]
-	
-	kernel_radius = 4*r
-	
-	# Initialiser les tableaux pour les valeurs aux interfaces
-	if dimensions == '2D':
-		shape = (nb_elem, nb_elem)
-		interface_types = ['left', 'right', 'up', 'down']
-	else:  # 3D
-		shape = (nb_elem, nb_elem, nb_elem)
-		interface_types = ['left', 'right', 'up', 'down', 'front', 'back']
-	
-	result_shape = shape + ((num_components,) if is_vector and component is None else ())
-	
-	# Dictionnaires pour stocker les résultats
-	grid_values = {interface: np.zeros(result_shape) for interface in interface_types}
-	particle_counts = {interface: np.zeros(shape) for interface in interface_types}
-	
-	# Positions des interfaces pour le calcul des distances
-	dx, dy, dz = grid['dx'], grid['dy'], grid['dz']
-	x_min, y_min, z_min = grid['x_min'], grid['y_min'], grid['z_min']
-	
-	# Pré-calculer les positions des interfaces
-	if dimensions == '2D':
-		# Pour une grille 2D
-		i_indices, j_indices = np.meshgrid(np.arange(nb_elem), np.arange(nb_elem), indexing='ij')
-		
-		# Positions des centres des cellules
-		x_centers = x_min + (i_indices + 0.5) * dx
-		y_centers = y_min + (j_indices + 0.5) * dy
-		
-		# Positions des interfaces
-		interface_positions = {
-			'left': np.stack([x_min + i_indices * dx, y_centers], axis=-1),
-			'right': np.stack([x_min + (i_indices + 1) * dx, y_centers], axis=-1),
-			'up': np.stack([x_centers, y_min + (j_indices + 1) * dy], axis=-1),
-			'down': np.stack([x_centers, y_min + j_indices * dy], axis=-1)
-		}
-		
-		cell_iterator = [(i, j) for i in range(nb_elem) for j in range(nb_elem)]
-	
-	else:  # 3D
-		# Pour une grille 3D
-		i_indices, j_indices, k_indices = np.meshgrid(np.arange(nb_elem), 
-													np.arange(nb_elem), 
-													np.arange(nb_elem), 
-													indexing='ij')
-		
-		# Positions des centres des cellules
-		x_centers = x_min + (i_indices + 0.5) * dx
-		y_centers = y_min + (j_indices + 0.5) * dy
-		z_centers = z_min + (k_indices + 0.5) * dz
-		
-		# Positions des interfaces
-		interface_positions = {
-			'left': np.stack([x_min + i_indices * dx, y_centers, z_centers], axis=-1),
-			'right': np.stack([x_min + (i_indices + 1) * dx, y_centers, z_centers], axis=-1),
-			'down': np.stack([x_centers, y_min + j_indices * dy, z_centers], axis=-1),
-			'up': np.stack([x_centers, y_min + (j_indices + 1) * dy, z_centers], axis=-1),
-			'back': np.stack([x_centers, y_centers, z_min + k_indices * dz], axis=-1),
-			'front': np.stack([x_centers, y_centers, z_min + (k_indices + 1) * dz], axis=-1)
-		}
-		
-		cell_iterator = [(i, j, k) for i in range(nb_elem) for j in range(nb_elem) for k in range(nb_elem)]
-
-	points = vtk_file.points
-	
-	# Traitement des interfaces pour chaque cellule
-	for cell_idx in cell_iterator:
-		for interface_type in interface_types:
-			# Récupérer le nom de l'interface correspondant dans la grille
-			if dimensions == '2D':
-				grid_interface_name = interface_mapping_2d[interface_type]
-				# Position de l'interface pour cette cellule
-				i, j = cell_idx
-				interface_pos = interface_positions[interface_type][i, j]
-			else:  # 3D
-				grid_interface_name = interface_mapping_3d[interface_type]
-				# Position de l'interface pour cette cellule
-				i, j, k = cell_idx
-				interface_pos = interface_positions[interface_type][i, j, k]
-			
-			# Récupérer les particules voisines de cette interface
-			if cell_idx in grid['cells']:
-				neighbors = grid['cells'][cell_idx]['border_neighbors'][grid_interface_name]
-			else:
-				neighbors = []
-			
-			# Si pas de voisins, passer à l'interface suivante
-			if not neighbors:
-				continue
-			
-			# Initialiser les accumulateurs pour cette interface
-			weighted_sum = np.zeros(num_components) if is_vector and component is None else 0.0
-			total_weight = 0.0
-			neighbor_count = 0
-			
-			# Traiter uniquement les particules voisines pré-calculées
-			for vtk_idx, particle_idx in neighbors:
-				# Position et attribut de la particule
-				particle_pos = np.array(points[particle_idx])
-				particle_attr = sample_attr[particle_idx]
-				
-				# Calculer la distance entre la particule et l'interface
-				if dimensions == '2D':
-					# En 2D, utiliser les 2 premières coordonnées (selon le plan)
-					distance = np.sqrt(np.sum((particle_pos[:2] - interface_pos)**2))
-				else:  # 3D
-					# En 3D, utiliser les 3 coordonnées
-					distance = np.sqrt(np.sum((particle_pos - interface_pos)**2))
-				
-				# Appliquer le kernel SPH si la distance est dans le rayon
-				if distance <= kernel_radius:
-					# Calculer le poids SPH
-					weight = W(distance, kernel_radius)
-					
-					# Ajouter la contribution de cette particule
-					if is_vector:
-						if component is not None:
-							weighted_sum += weight * particle_attr[component]
-						else:
-							weighted_sum += weight * particle_attr
-					else:
-						weighted_sum += weight * particle_attr
-					
-					total_weight += weight
-					neighbor_count += 1
-			
-			# Calculer la moyenne pondérée si des particules influencent cette interface
-			if neighbor_count > 0 and total_weight > 0:
-				if dimensions == '2D':
-					grid_values[interface_type][i, j] = weighted_sum / total_weight
-					particle_counts[interface_type][i, j] = neighbor_count
-				else:  # 3D
-					grid_values[interface_type][i, j, k] = weighted_sum / total_weight
-					particle_counts[interface_type][i, j, k] = neighbor_count
-	
-	# Ajouter les valeurs et métadonnées à l'objet grid
-	for interface_type, key in value_keys.items():
-		if interface_type in grid_values:  # Vérifier que l'interface existe
-			grid[key] = grid_values[interface_type]
-			
-			# Ajouter les informations sur les interfaces
-			grid[f"{key}_info"] = {
-				'attribute': attribute_name,
-				'is_vector': is_vector,
-				'num_components': num_components,
-				'component': component,
-				'particle_counts': particle_counts[interface_type],
-				'kernel_radius': kernel_radius,
-				'method': 'sph',
-				'interface_type': interface_type
-			}
-	
 	return grid
-
 
 def spatial_derivative(grid, attribute_name, deriv_axis='x', component=None):
-	"""
-	Calcule la dérivée spatiale d'un attribut dans la grille.
-	Fonctionne pour les grilles 2D et 3D.
 	
-	Args:
-		grid: Grille issue de compute_grid_values avec valeurs aux interfaces
-		attribute_name: Nom de l'attribut dont on veut calculer la dérivée
-		deriv_axis: Axe de dérivation ('x', 'y' ou 'z')
-		component: Composante de l'attribut vectoriel (None pour toutes)
-	"""
 	dimensions = grid['dimensions']
-	suffix = f"_{component}" if component is not None else ""
+	cell_values = grid['cell_values']
+	dx, dy, dz = grid['L_cell'], grid['L_cell'], grid['L_cell']
 	
-	# Construire les noms d'attributs pour les interfaces
 	if dimensions == '2D':
-		value_keys = {
-			'left': f"{attribute_name}{suffix}_left",
-			'right': f"{attribute_name}{suffix}_right",
-			'up': f"{attribute_name}{suffix}_up",
-			'down': f"{attribute_name}{suffix}_down"
-		}
-		
-		# Vérifier la compatibilité avec le plan
 		if deriv_axis == 'y' and grid.get('plane') == 'xz':
-			raise ValueError(f"L'axe de dérivation 'y' n'est pas dans le plan '{grid['plane']}'")
+			raise ValueError(f"The derivative axis 'y' is not in the plane '{grid['plane']}'")
 		elif deriv_axis == 'z' and grid.get('plane') == 'xy':
-			raise ValueError(f"L'axe de dérivation 'z' n'est pas dans le plan '{grid['plane']}'")
+			raise ValueError(f"The derivative axis 'z' is not in the plane '{grid['plane']}'")
+		elif deriv_axis == 'x' and grid.get('plane') == 'yz':
+			raise ValueError(f"The derivative axis 'x' is not in the plane '{grid['plane']}'")
 		
-	else:  # 3D
-		value_keys = {
-			'left': f"{attribute_name}{suffix}_left",
-			'right': f"{attribute_name}{suffix}_right",
-			'up': f"{attribute_name}{suffix}_up",
-			'down': f"{attribute_name}{suffix}_down",
-			'front': f"{attribute_name}{suffix}_front",
-			'back': f"{attribute_name}{suffix}_back"
-		}
-	
-	# Calculer la dérivée selon l'axe demandé
-	if deriv_axis == 'x':
-		if value_keys['left'] not in grid or value_keys['right'] not in grid:
-			raise ValueError(f"Les attributs d'interface '{value_keys['left']}' ou '{value_keys['right']}' n'existent pas.")
 		
-		# Récupérer directement la différence entre interfaces
-		derivative = (grid[value_keys['right']] - grid[value_keys['left']]) / grid['dx']
-		
-	elif deriv_axis == 'y':
-		if value_keys['down'] not in grid or value_keys['up'] not in grid:
-			raise ValueError(f"Les attributs d'interface '{value_keys['down']}' ou '{value_keys['up']}' n'existent pas.")
-		
-		# Calculer directement la différence
-		derivative = (grid[value_keys['up']] - grid[value_keys['down']]) / grid['dy']
-		
-	elif deriv_axis == 'z':
-		if dimensions == '3D':
-			if value_keys['back'] not in grid or value_keys['front'] not in grid:
-				raise ValueError(f"Les attributs d'interface '{value_keys['back']}' ou '{value_keys['front']}' n'existent pas.")
-			
-			# Calculer directement la différence
-			derivative = (grid[value_keys['front']] - grid[value_keys['back']]) / grid['dz']
-		else:  # 2D avec plan xz ou yz
-			# Pour 2D, nous utilisons les interfaces down/up pour l'axe z
-			if grid['plane'] in ['xz', 'yz']:
-				# Dans ce cas, z correspond aux interfaces haut/bas
-				derivative = (grid[value_keys['up']] - grid[value_keys['down']]) / grid['dz']
-			else:
-				raise ValueError(f"L'axe de dérivation 'z' n'est pas dans le plan '{grid['plane']}'")
-	else:
-		raise ValueError(f"Axe de dérivation '{deriv_axis}' non valide")
-	
-	# Gestion des transpositions selon la dimension
 	if dimensions == '2D':
-		# En 2D, déterminer quelles dimensions doivent être transposées
-		if derivative.ndim >= 2:
-			# Transposer seulement les deux premières dimensions (i, j)
-			if derivative.ndim == 2:  # Pour scalaires en 2D
-				derivative = derivative.T
-			elif derivative.ndim == 3:  # Pour vecteurs en 2D
-				# Réorganiser pour transposer i, j tout en conservant la dimension des composantes
-				derivative = np.transpose(derivative, (1, 0, 2))
+		if grid['plane'] == 'xy':
+			nx, ny = grid['nb_elems'][0], grid['nb_elems'][1]
+		elif grid['plane'] == 'xz':
+			nx, nz = grid['nb_elems'][0], grid['nb_elems'][2]
+		elif grid['plane'] == 'yz':
+			ny, nz = grid['nb_elems'][1], grid['nb_elems'][2]
 	else:  # 3D
-		# En 3D, transposer si nécessaire (normalement pas besoin si les dimensions sont cohérentes)
-		pass
+		nx, ny, nz = grid['nb_elems'][0], grid['nb_elems'][1], grid['nb_elems'][2]
 	
-	# Générer une clé pour stocker la dérivée dans la grille
+
+	derivative = np.zeros_like(cell_values)
+	if deriv_axis == 'x':
+		if dimensions == '2D':
+			if grid['plane'] == 'xy':
+				
+				# Schéma centré d'ordre 4 pour les points intérieurs
+				for i in range(2, nx-2):
+					derivative[i, :] = (-cell_values[i+2, :] + 8*cell_values[i+1, :] - 
+										8*cell_values[i-1, :] + cell_values[i-2, :]) / (12*dx)
+				
+				# Pour les points proches des bords
+				if nx > 3:
+					derivative[1, :] = (cell_values[2, :] - cell_values[0, :]) / (2*dx)
+					derivative[nx-2, :] = (cell_values[nx-1, :] - cell_values[nx-3, :]) / (2*dx)
+					derivative[0, :] = (-3*cell_values[0, :] + 4*cell_values[1, :] - cell_values[2, :]) / (2*dx)
+					derivative[nx-1, :] = (3*cell_values[nx-1, :] - 4*cell_values[nx-2, :] + cell_values[nx-3, :]) / (2*dx)
+			
+			elif grid['plane'] == 'xz':
+				
+				for i in range(2, nx-2):
+					derivative[i, :] = (-cell_values[i+2, :] + 8*cell_values[i+1, :] - 
+										8*cell_values[i-1, :] + cell_values[i-2, :]) / (12*dx)
+				
+				if nx > 3:
+					derivative[1, :] = (cell_values[2, :] - cell_values[0, :]) / (2*dx)
+					derivative[nx-2, :] = (cell_values[nx-1, :] - cell_values[nx-3, :]) / (2*dx)
+					derivative[0, :] = (-3*cell_values[0, :] + 4*cell_values[1, :] - cell_values[2, :]) / (2*dx)
+					derivative[nx-1, :] = (3*cell_values[nx-1, :] - 4*cell_values[nx-2, :] + cell_values[nx-3, :]) / (2*dx)
+		
+		elif dimensions == '3D':
+			
+			for i in range(2, nx-2):
+				derivative[i, :, :] = (-cell_values[i+2, :, :] + 8*cell_values[i+1, :, :] - 
+									8*cell_values[i-1, :, :] + cell_values[i-2, :, :]) / (12*dx)
+			
+			if nx > 3:
+				derivative[1, :, :] = (cell_values[2, :, :] - cell_values[0, :, :]) / (2*dx)
+				derivative[nx-2, :, :] = (cell_values[nx-1, :, :] - cell_values[nx-3, :, :]) / (2*dx)
+				derivative[0, :, :] = (-3*cell_values[0, :, :] + 4*cell_values[1, :, :] - 
+									cell_values[2, :, :]) / (2*dx)
+				derivative[nx-1, :, :] = (3*cell_values[nx-1, :, :] - 4*cell_values[nx-2, :, :] + 
+										cell_values[nx-3, :, :]) / (2*dx)
+	
+	elif deriv_axis == 'y':
+		if dimensions == '2D':
+			if grid['plane'] == 'xy':
+				
+				for j in range(2, ny-2):
+					derivative[:, j] = (-cell_values[:, j+2] + 8*cell_values[:, j+1] - 
+									8*cell_values[:, j-1] + cell_values[:, j-2]) / (12*dy)
+				
+				if ny > 3:
+					derivative[:, 1] = (cell_values[:, 2] - cell_values[:, 0]) / (2*dy)
+					derivative[:, ny-2] = (cell_values[:, ny-1] - cell_values[:, ny-3]) / (2*dy)
+					derivative[:, 0] = (-3*cell_values[:, 0] + 4*cell_values[:, 1] - 
+									cell_values[:, 2]) / (2*dy)
+					derivative[:, ny-1] = (3*cell_values[:, ny-1] - 4*cell_values[:, ny-2] + 
+										cell_values[:, ny-3]) / (2*dy)
+			
+			elif grid['plane'] == 'yz':
+				
+				for j in range(2, ny-2):
+					derivative[j, :] = (-cell_values[j+2, :] + 8*cell_values[j+1, :] - 
+									8*cell_values[j-1, :] + cell_values[j-2, :]) / (12*dy)
+				
+				if ny > 3:
+					derivative[1, :] = (cell_values[2, :] - cell_values[0, :]) / (2*dy)
+					derivative[ny-2, :] = (cell_values[ny-1, :] - cell_values[ny-3, :]) / (2*dy)
+					derivative[0, :] = (-3*cell_values[0, :] + 4*cell_values[1, :] - 
+									cell_values[2, :]) / (2*dy)
+					derivative[ny-1, :] = (3*cell_values[ny-1, :] - 4*cell_values[ny-2, :] + 
+										cell_values[ny-3, :]) / (2*dy)
+		
+		elif dimensions == '3D':
+			
+			
+			for j in range(2, ny-2):
+				derivative[:, j, :] = (-cell_values[:, j+2, :] + 8*cell_values[:, j+1, :] - 
+									8*cell_values[:, j-1, :] + cell_values[:, j-2, :]) / (12*dy)
+			
+			if ny > 3:
+				derivative[:, 1, :] = (cell_values[:, 2, :] - cell_values[:, 0, :]) / (2*dy)
+				derivative[:, ny-2, :] = (cell_values[:, ny-1, :] - cell_values[:, ny-3, :]) / (2*dy)
+				derivative[:, 0, :] = (-3*cell_values[:, 0, :] + 4*cell_values[:, 1, :] - 
+									cell_values[:, 2, :]) / (2*dy)
+				derivative[:, ny-1, :] = (3*cell_values[:, ny-1, :] - 4*cell_values[:, ny-2, :] + 
+										cell_values[:, ny-3, :]) / (2*dy)
+	
+	elif deriv_axis == 'z':
+		if dimensions == '2D':
+			if grid['plane'] == 'xz':
+				
+				for k in range(2, nz-2):
+					derivative[:, k] = (-cell_values[:, k+2] + 8*cell_values[:, k+1] - 
+									8*cell_values[:, k-1] + cell_values[:, k-2]) / (12*dz)
+				
+				if nz > 3:
+					derivative[:, 1] = (cell_values[:, 2] - cell_values[:, 0]) / (2*dz)
+					derivative[:, nz-2] = (cell_values[:, nz-1] - cell_values[:, nz-3]) / (2*dz)
+					derivative[:, 0] = (-3*cell_values[:, 0] + 4*cell_values[:, 1] - 
+									cell_values[:, 2]) / (2*dz)
+					derivative[:, nz-1] = (3*cell_values[:, nz-1] - 4*cell_values[:, nz-2] + 
+										cell_values[:, nz-3]) / (2*dz)
+		
+			elif grid['plane'] == 'yz':
+			
+				for k in range(2, nz-2):
+					derivative[:, k] = (-cell_values[:, k+2] + 8*cell_values[:, k+1] - 
+									8*cell_values[:, k-1] + cell_values[:, k-2]) / (12*dz)
+				
+				if nz > 3:
+					derivative[:, 1] = (cell_values[:, 2] - cell_values[:, 0]) / (2*dz)
+					derivative[:, nz-2] = (cell_values[:, nz-1] - cell_values[:, nz-3]) / (2*dz)
+					derivative[:, 0] = (-3*cell_values[:, 0] + 4*cell_values[:, 1] - 
+									cell_values[:, 2]) / (2*dz)
+					derivative[:, nz-1] = (3*cell_values[:, nz-1] - 4*cell_values[:, nz-2] + 
+										cell_values[:, nz-3]) / (2*dz)
+		
+		elif dimensions == '3D':
+			
+			for k in range(2, nz-2):
+				derivative[:, :, k] = (-cell_values[:, :, k+2] + 8*cell_values[:, :, k+1] - 
+									8*cell_values[:, :, k-1] + cell_values[:, :, k-2]) / (12*dz)
+			
+			if nz > 3:
+				derivative[:, :, 1] = (cell_values[:, :, 2] - cell_values[:, :, 0]) / (2*dz)
+				derivative[:, :, nz-2] = (cell_values[:, :, nz-1] - cell_values[:, :, nz-3]) / (2*dz)
+				derivative[:, :, 0] = (-3*cell_values[:, :, 0] + 4*cell_values[:, :, 1] - 
+									cell_values[:, :, 2]) / (2*dz)
+				derivative[:, :, nz-1] = (3*cell_values[:, :, nz-1] - 4*cell_values[:, :, nz-2] + 
+										cell_values[:, :, nz-3]) / (2*dz)
+	
+	else:
+		raise ValueError(f"Derivative axis '{deriv_axis}' non valid. Use 'x', 'y' or 'z'.")
+	
 	comp_str = f"_{component}" if component is not None else ""
 	deriv_key = f"d{attribute_name}{comp_str}_d{deriv_axis}"
 	
-	# Ajouter la dérivée et les métadonnées
 	grid[deriv_key] = derivative
 	grid[f"{deriv_key}_info"] = {
 		'attribute': attribute_name,
 		'component': component,
 		'axis': deriv_axis,
-		'method': 'finite_volume'
 	}
 	
 	return derivative
+
+def plot_grid_and_particles(vtk_file, grid, min_bounds, max_bounds, L_cell, max_particles=5000):
+	# Création de la figure
+	fig, ax = plt.subplots(figsize=(12, 10))
+
+
+	x_min, y_min = min_bounds[0], min_bounds[1]
+	dx, dy = L_cell, L_cell
+	x_idx, y_idx = 0, 1  # Indices pour extraire les coordonnées Y et Z
+	nx, ny = grid['nb_elems'][0], grid['nb_elems'][1]
+
+	
+	# 1. Afficher les particules (limitées à max_particles pour la performance)
+	points = vtk_file.points
+	if len(points) > max_particles:
+		# Échantillonner aléatoirement pour ne pas surcharger le graphique
+		indices = np.random.choice(len(points), max_particles, replace=False)
+		points_to_plot = np.array(points)[indices]
+	else:
+		points_to_plot = np.array(points)
+	
+
+	points_in_box = points_to_plot
+	
+	# Tracer les particules
+	ax.scatter(points_in_box[:, x_idx], points_in_box[:, y_idx], s=3, color='blue', alpha=0.5, label='Particules')
+	
+	# 2. Dessiner la grille
+	# Dessiner les lignes verticales
+	for i in range(nx + 1):
+		ax.plot([x_min + i * dx, x_min + i * dx],
+				[y_min, y_min + ny * dy],
+				'k-', linewidth=0.5, alpha=0.3)
+	
+	# Dessiner les lignes horizontales
+	for j in range(ny + 1):
+		ax.plot([x_min, x_min + nx * dx],
+				[y_min + j * dy, y_min + j * dy],
+				'k-', linewidth=0.5, alpha=0.3)
+	
+	# 3. Afficher les indices des cellules
+	# Ajuster le nombre de cellules à étiqueter pour éviter l'encombrement
+	step_i = max(1, nx // 20)
+	step_j = max(1, ny // 20)
+	
+	for i in range(0, nx, step_i):
+		for j in range(0, ny, step_j):
+			cell_center_x = x_min + (i + 0.5) * dx
+			cell_center_y = y_min + (j + 0.5) * dy
+			
+			# Ajouter l'étiquette (i,j)
+			ax.text(cell_center_x, cell_center_y, f"({i},{j})",
+				fontsize=8, ha='center', va='center',
+				bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.1'))
+	
+	# 4. Mise en forme du graphique
+	ax.set_xlim(min_bounds[0], max_bounds[0])
+	ax.set_ylim(min_bounds[1], max_bounds[1])
+	
+	ax.set_title('Particules VTK et grille de calcul')
+	
+	# Ajouter une boîte englobante
+	rect = patches.Rectangle((min_bounds[0], min_bounds[1]),
+						max_bounds[0]-min_bounds[0],
+						max_bounds[1]-min_bounds[1],
+						linewidth=2, edgecolor='r', facecolor='none')
+	ax.add_patch(rect)
+	
+	plt.tight_layout()
+	
+	return fig, ax
+

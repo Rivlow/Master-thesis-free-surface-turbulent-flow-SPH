@@ -470,7 +470,7 @@ def plot_conjugate_height(x_all, z_all, h_all, Fr_all, save=False):
 	return fig, ax
 
 
-def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
+def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False, savepath=None):
 	"""
 	Plot water height.
 
@@ -505,8 +505,8 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False):
 	ax1.grid(True)
 
 	plt.tight_layout()
-	if save:
-		plt.savefig("Pictures/CH5_valid_test/free_surface/water_height_last.pdf")
+	if save and savepath is not None:
+		plt.savefig(f"{savepath}water_height.pdf", dpi=300)
 
 def plot_Fr(x, x_th, Fr, Fr_th, save=False, savepath=None):
 
