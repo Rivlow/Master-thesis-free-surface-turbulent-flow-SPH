@@ -106,7 +106,7 @@ Utility script that automatically copies simulation outputs from the default loc
 
 1. **Generate Scene Parameters**
    ```bash
-   python own_python/write_scenes/Free_surface_analysis.py
+   python own_python/write_scenes/wrte_free_surface.py
    ```
 
 2. **Execute Simulation**
@@ -146,12 +146,8 @@ All simulations are particle size-independent. To change spatial resolution:
 
 Special thanks to:
 - **[Professor Pierre Archambeau](https://www.uliege.be/cms/c_9054334/fr/repertoire?uid=u016646)** - For his relentless support, guidance, and clear explanations during this Master's thesis
-- **Jan Bender** - For his immediate and helpful responses to technical questions during desperate moments
+- **[Jan Bender] (https://animation.rwth-aachen.de/person/1/)** - For his immediate and helpful responses to technical questions during desperate moments
 - The SPlisHSPlasH development team for providing an excellent SPH framework
-
-## 📄 License
-
-This project is part of a Master's thesis at the University of Liège. Please contact the author for usage rights and citations.
 
 ---
 
