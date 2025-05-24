@@ -146,7 +146,7 @@ All simulations are particle size-independent. To change spatial resolution:
 
 Special thanks to:
 - **[Professor Pierre Archambeau](https://www.uliege.be/cms/c_9054334/fr/repertoire?uid=u016646)** - For his relentless support, guidance, and clear explanations during this Master's thesis
-- **[Jan Bender] (https://animation.rwth-aachen.de/person/1/)** - For his immediate and helpful responses to technical questions during desperate moments
+- **[Professor Jan Bender](https://animation.rwth-aachen.de/person/1/)** - For his immediate and helpful responses to technical questions during desperate moments
 - The SPlisHSPlasH development team for providing an excellent SPH framework
 
 ---
