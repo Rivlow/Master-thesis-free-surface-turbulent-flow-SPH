@@ -18,23 +18,22 @@ def main():
 	# Write JSON file
 	write = True
 	json_path = "SPlisHSPlasH/data/Scenes/free_surface.json"
-	summary_path = "my_output/local/free_surface/r_10mm/summary.txt"
-	output_path = "SPlisHSPlasH/bin/output/free_surface"
+	output_path = "SPlisHSPlasH/bin/output/free_surface/r_4mm/reduced_domain/"
 
 	#-----------------------------#
 	#    SIMULATION PARAMETER     #
 	#-----------------------------#
 	
 	# Simulation time and step
-	t_end = 400*s
+	t_end = 200*s
 	timeStepSize = 0.001*s
 	sim2D = True
 	maxEmitterParticles = 10000000
 	
 
 	# Physical parameters
-	r = 4 * (mm)               
-	U_0 = 0.36 * (m/s)         
+	r = 2 * (mm)               
+	U_0 = 0.4 * (m/s)         
 	g = 9.81 * (m/s**2)
 	rho_0 = 1000 * (kg/m**3)
 
@@ -86,8 +85,8 @@ def main():
 	# Horizontal blocs
 	Ly = 0.1
 	Lz = 1.0
-	Lx_1 = 8
-	Lx_2 = 13
+	Lx_1 = 8/8
+	Lx_2 = 13/8
 
 	# Parabola obstacle
 	nb_elem = 10
@@ -95,7 +94,7 @@ def main():
 	parabola_end = parabola_start + 4
 
 	# Emitter 
-	Ly_emit = 0.5 * (m)               # Emitter height
+	Ly_emit = 0.45 * (m)               # Emitter height
 	Lx_emit = particle          # Emitter width
 
 	# Translations

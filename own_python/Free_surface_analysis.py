@@ -27,7 +27,6 @@ from validation_test.Tools_valid import *
 from validation_test.final import *
 from Misc.kernels import *
 
-
 # Units
 kg = 1
 m = 1
@@ -47,8 +46,8 @@ def main():
 	
 
 	# Load vtk files
-	vtk_folder = "my_output/local/free_surface/r_4mm"
-	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=200)
+	vtk_folder = "my_output/local/free_surface/r_4mm/reduced_domain/"
+	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=0)
 	last_vtk = all_vtk[-1]
 
 	savepath = 'Pictures/CH5_valid_test/free_surface/'
@@ -63,50 +62,59 @@ def main():
 	y_pos = calculate_emitter_particle_positions(trans_emit, int(Lx_emit / (2 * r)), int(Ly_emit / (2 * r)), r)
 	Q_init = np.max(y_pos)*U_0
 
-	points, h_sph, u_sph, Fr_sph, Head_rel_sph, Head_abs_sph = extract_water_height(all_vtk[-1], plot=False, save=False)
-	points[:,1] += 0.015
-	h_sph[:,1] += 0.015
-
-	#-------------------#
-	#   Main analysis   #
-	#-------------------#
-	x_th, z_th, h_th, Fr_th, H_inlet, H_outlet = compute_theoretical_water_height(Q_init)
-	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=True, savepath=savepath)
-	#plot_Fr(h_sph[:,0], x_th, Fr_sph, Fr_th, save=True, savepath=savepath)
-	#plot_Head(h_sph[:,0], Head_abs_sph, H_inlet, H_outlet, save=True, savepath=savepath)
-
-	
-	#---------------------------------------------#
-	#   Hydrostatic/velocity check  (global form) #
-	#---------------------------------------------#
-	#u_mult = get_multiple_slices(**common_mult, attribute='velocity',component=0)
-	#p_rho2_mult = get_multiple_slices(**common_mult, attribute='p_/_rho^2')
-	#rho_mult = get_multiple_slices(**common_mult, attribute='density')
-	#is_hydrostatic(p_rho2_mult, rho_mult, save=False, savepath=savepath+'/')
-	#check_hydrostatic(p_rho2_mult, rho_mult, 0, 0.33, plot=True, save=False)
-
-	#rho_slices  = get_multiple_slices(**common_mult, attribute='density')
-	
-	#Q_v, Q_m = compute_flow_rate(Q_init, 1000, u_slices, rho_slices, plot=True, save=True, savepath = savepath+'/free_surface_')
-
-
-	#plot_vtk(all_vtk[139], mask=None, attribute='velocity', is_plt=True, save=True, savepath=savepath+'/step4')
-
 	common_mult = {
 		'vtk_file': last_vtk,
 		'plane': 'xy',
 		'axis': 'x',
-		'along': [15, 24],
-		'thickness': 5*particle,
+		'along': [0, 24],
+		'trans_val': [0.05, 0.3],
+		'thickness': 10*particle,
 	}
 
 	common_single = {
 		'vtk_files': all_vtk,
 		'plane': 'xy',
 		'axis': 'x',
-		'fixed_coord': 15 * (m),
-		'thickness': 5*particle,
+		'fixed_coord': 5 * (m),
+		'thickness': 2.5,
 	}
+
+	
+
+	#-------------------#
+	#   Main analysis   #
+	#-------------------#
+
+	points, h_sph, u_sph, Fr_sph, Head_rel_sph, Head_abs_sph = extract_water_height(all_vtk[-1], plot=False, save=False)
+	
+	points[:,1] += 0.015
+	h_sph[:,1] += 0.015
+
+	points[:,0] += 7
+	h_sph[:,0] += 7
+	x_th, z_th, h_th, Fr_th, H_inlet, H_outlet = compute_theoretical_water_height(Q_init, nb_points=len(h_sph[:,1]))
+
+	#plot_Fr(h_sph[:,0], x_th, Fr_sph, Fr_th, save=True, savepath=savepath)
+	#plot_Head(h_sph[:,0], Head_abs_sph, H_inlet, H_outlet, save=True, savepath=savepath)
+	
+	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False, savepath=savepath)
+
+	
+	
+	#---------------------------------------------#
+	#   Hydrostatic/velocity check  (global form) #
+	#---------------------------------------------#
+	#u_mult = get_multiple_slices(**common_mult, attribute='velocity',component=0)
+	p_rho2_mult = get_multiple_slices(**common_mult, attribute='p_/_rho^2')
+	rho_mult = get_multiple_slices(**common_mult, attribute='density')
+	#check_hydrostatic(p_rho2_mult, rho_mult, 0, 0.33, plot=True, save=False)
+
+	#is_uniform(u_mult, save=False, savepath=savepath)
+	#rho_slices  = get_multiple_slices(**common_mult, attribute='density')
+	#Q_v, Q_m = compute_flow_rate(Q_init, 1000, u_slices, rho_slices, plot=True, save=True, savepath = savepath+'/free_surface_')
+	#plot_vtk(all_vtk[-1], mask=None, attribute='angular_velocity', is_plt=True, save=False, savepath=savepath+'/vorticity')
+
+	
 
 	#--------------------------------------#
 	#   Derivative analysis (local form)   #
@@ -123,7 +131,7 @@ def main():
 	grid_rho = grid = compute_grid_values(grid, all_vtk[-1], 'velocity', 4*particle, W, component=0)
 	axis = {'x':0, 'y':1, 'z':2}
 	d_rho_dx  = spatial_derivative(grid_rho, axis['x'])
-      
+	
 	plt.figure()
 	plt.imshow(d_rho_dx.T, origin='lower', aspect='auto')
 	'''

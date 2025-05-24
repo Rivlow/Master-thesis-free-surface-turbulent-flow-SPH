@@ -34,10 +34,11 @@ g = 9.81 * (m/s**2)
 
 def main():
 
-	vtk_folder = "my_output/local/bridge/r_3_33mm"
+	vtk_folder = "my_output/local/bridge/r_4mm/h_200mm"
+	savepath = 'Pictures/CH5_valid_test/bridge/'
 
 
-	U_0 = 0.36 * (m/s)
+	U_0 = 0.36/2 * (m/s)
 	nu = 1e-6 * (m**2/s)
 	rho = 1e3 * (kg/m**3)
 	r = 4 * (mm)
@@ -46,34 +47,16 @@ def main():
 	particle = 2*r
 
 	# Load vtk files
-	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=900)
-	vtk_file = all_vtk[-1]
+	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=700)
+	last_vtk = all_vtk[-1]
 	#plot_vtk(vtk_file, mask=None, attribute='velocity')
 	
-	positions, values, derivative = spatial_derivative(
-		vtk_file=vtk_file,
-		attribute='velocity',
-		plane='xy',
-		axis='x', along = [5, 45],
-		thickness=50*particle,
-		component=0  # if velocity is selected
-	)
+	mid_plane, mask_plane = project_surface(last_vtk.points, "z", -150*mm, thickness=2*particle)
 
+	points, h_sph, u_sph, Fr_sph, Head_rel_sph, Head_abs_sph = extract_water_height(last_vtk, mask=mask_plane, plot=False, save=False)
+	plot_Head(h_sph[:,0], Head_abs_sph, 0, 1, save=False, savepath=savepath)
 
-	plt.figure(figsize=(12, 8))
-
-	plt.plot(positions, derivative, 'r-o')
-	plt.axhline(y=0, color='k', linestyle='--')  # Ligne horizontale à y=0
-	plt.title('Dérivée spatiale de la vitesse (du_x/dx)')
-	plt.xlabel('Position x')
-	plt.ylabel('du_x/dx')
-	plt.grid(True)
-
-	plt.tight_layout()
-	plt.show()
-	
-
-	#plot_vtk(vtk_file, mask=mask_line, attribute='velocity', r=r)
+	plotter = plot_vtk(last_vtk, mask=mask_plane, attribute='velocity')
 
 	plt.show()
 

@@ -164,14 +164,19 @@ def solve_height_aval(q, g, x, z_b, H):
 		return np.max(real_positive_roots)
 	
 	
-def extract_water_height(vtk_file, plot=False, save=False):
-	
-	pos = np.array(vtk_file.points)
+def extract_water_height(vtk_file, mask=None, plot=False, save=False):
+
+	if mask is not None:
+		pos = vtk_file.points[mask]
+		u = np.array(vtk_file.point_data['velocity'])[mask] 
+	else:	
+		pos = np.array(vtk_file.points)
+		u = np.array(vtk_file.point_data['velocity'])
 	
 	# Only particles with y > 0
 	positive_y_mask = pos[:, 1] > 0
 	pos = pos[positive_y_mask]
-	u = np.array(vtk_file.point_data['velocity'])[positive_y_mask]
+	u = u[positive_y_mask]
 
 	# Sort particles along x axis
 	sorted_indices = np.argsort(pos[:, 0])
@@ -242,7 +247,7 @@ def extract_water_height(vtk_file, plot=False, save=False):
 	return np.array(pos), np.array(h), np.array(u), np.array(Fr), np.array(Head_rel), np.array(Head_abs)
 
 
-def compute_theoretical_water_height(Q_init=0.18):
+def compute_theoretical_water_height(Q_init=0.18, nb_points=500):
 	"""
 	Calculate the theoretical water height.
 
@@ -271,9 +276,9 @@ def compute_theoretical_water_height(Q_init=0.18):
 	H_amont = z_b(10) + h_cr + q**2/(2*g*h_cr**2)
 	H_aval = 0 + h_aval + q**2/(2*g*h_aval**2)
 
-	nb_elem = 2000
-	x_amont = np.linspace(0, x_ressaut, nb_elem)
-	x_aval = np.linspace(25, x_ressaut, nb_elem)
+	nb_elem = nb_points
+	x_amont = np.linspace(0, x_ressaut, nb_elem//3+1)
+	x_aval = np.linspace(25, x_ressaut, nb_elem//3)
 
 	# Topography
 	z_aval = np.array([z_b(x) for x in x_aval])
@@ -283,8 +288,8 @@ def compute_theoretical_water_height(Q_init=0.18):
 	h_amont = np.array([solve_height_amont(q, g, x, z_b, H_amont) for x in x_amont])
 	h_aval = np.array([solve_height_aval(q, g, x, z_b, H_aval) for x in x_aval])
 
-	h_inter = np.linspace(h_amont[-1], h_aval[-1], nb_elem)
-	x_inter = np.linspace(x_amont[-1], x_aval[-1], nb_elem)
+	h_inter = np.linspace(h_amont[-1], h_aval[-1], nb_elem//3+1)
+	x_inter = np.linspace(x_amont[-1], x_aval[-1], nb_elem//3+1)
 	z_inter = np.array([z_b(x) for x in x_inter])
 
 	# Froude numbers over whole distance

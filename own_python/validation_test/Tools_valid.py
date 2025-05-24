@@ -46,6 +46,38 @@ def get_name(slice):
 def closest_value(list, target):
 	return min(list, key=lambda x: abs(x - target))
 
+def plot_matrix_with_colorbar(matrix, x_min, x_max, y_min, y_max, num_ticks=5, 
+							vmin=None, vmax=None, cbar_label="Valeur",
+							x_label="X [m]", y_label="Y [m]", 
+							figsize=(10, 6), grid=True, 
+							save=False, savepath=None):
+	
+	fig = plt.figure()
+	ax = fig.add_subplot(111)
+	
+	im = ax.imshow(matrix.T, origin='lower', aspect='auto', vmin=vmin, vmax=vmax)
+	
+	ax.set_xticks(np.linspace(0, matrix.shape[0]-1, num_ticks))
+	ax.set_xticklabels(np.round(np.linspace(x_min, x_max, num_ticks), 2))
+	
+	ax.set_yticks(np.linspace(0, matrix.shape[1]-1, num_ticks))
+	ax.set_yticklabels(np.round(np.linspace(y_min, y_max, num_ticks), 2))
+	
+	ax.set_xlabel(x_label)
+	ax.set_ylabel(y_label)
+	
+	cbar = fig.colorbar(im, ax=ax, orientation='horizontal', pad=0.05, location='top')
+	cbar.set_label(cbar_label)
+	
+	plt.grid()
+	
+	plt.tight_layout()
+
+	if save and savepath is not None:
+		plt.savefig(f'{savepath}imshow.PDF', dpi=300)
+	
+	return fig, ax
+
 
 def project_line(points, 
 				plane, axis, fixed_coord, 
@@ -110,7 +142,7 @@ def project_line(points,
 
 def project_surface(points, 
 					axis, fixed_coord, 
-					bounds, thickness):
+					bounds=None, thickness=0.1):
 	
 	axis_dict = {'x': 0, 'y': 1, 'z': 2}
 	
@@ -445,7 +477,10 @@ def get_multiple_slices(vtk_file, attribute, mean=False,
 	return slice_result
 	
 
-def spatial_derivative__(slices, axis, plot=False, save=False, savepath=None):
+def spatial_derivative__(slices, chosen_axis, plot=False, save=False, savepath=None):
+
+	axis_dict = {'x':0, 'y':1, 'z':2}
+	axis = axis_dict[chosen_axis]
 
 	mean_vals = []
 	pos = []
@@ -557,6 +592,8 @@ def plot_vtk(vtk_file, mask=None, attribute='velocity', save=False, savepath=Non
 		
 		if save and savepath is not None:
 			plotter.screenshot(savepath)
+
+		plotter.show()
 		
 		return plotter  # Retourner le plotter pour permettre show() plus tard
 	
@@ -569,7 +606,7 @@ def plot_vtk(vtk_file, mask=None, attribute='velocity', save=False, savepath=Non
 		fig, ax = plt.subplots()
 		
 		# Tracer les points avec une coloration selon l'attribut
-		norm = Normalize(vmin=0, vmax=2)
+		norm = Normalize()
 		scatter = ax.scatter(x, y, c=magnitude, cmap='viridis', s=1, alpha=0.8, norm=norm)
 		
 		# Ajouter une barre de couleur
@@ -623,11 +660,11 @@ def compute_flow_rate(Q_v_th, rho0,
 	Q_m_th = Q_v_th*rho0
 	Q_v_mean = np.mean(Q_v)
 	Q_m_mean = np.mean(Q_m)
-	error_Q_v = 100 * (Q_v_th - Q_v_mean) / Q_v_th
-	error_Q_m = 100 * (Q_m_th - Q_m_mean) / Q_m_th
+	error_Q_v = (Q_v_th - Q_v_mean) / Q_v_th
+	error_Q_m = (Q_m_th - Q_m_mean) / Q_m_th
 
-	print(f'Error on flow rate: {error_Q_v}%')
-	print(f'Error on masss flow: {error_Q_v}%')
+	print(f'Error on flow rate: {100*error_Q_v}%')
+	print(f'Error on masss flow: {100*error_Q_v}%')
 
 	if plot:
 
@@ -1061,7 +1098,63 @@ def create_grid(vtk_file, bounds, L_cell, dimensions='2D', plane='xy', r=None):
 	return grid
 
 import itertools
-def compute_grid_values(grid, vtk_file, attribute_name, h, W, component=None):
+
+def compute_grid_values(grid, vtk_files, attribute_name, h, W, component=None):
+	import numpy as np
+	from scipy.spatial import cKDTree
+	import itertools
+
+	# Gestion des fichiers VTK (liste ou fichier unique)
+	if not isinstance(vtk_files, list):
+		vtk_files = [vtk_files]
+
+	# Initialisation des accumulateurs
+	if 'time_data' not in grid:
+		grid['time_data'] = {
+			'values_sum': None,
+			'count': np.zeros(grid['cell_shape'], dtype=int)
+		}
+
+	for vtk_file in vtk_files:
+		# Calcul des valeurs instantanées
+		result = compute_instant_values(grid, vtk_file, attribute_name, h, W, component)
+		
+		# Mise à jour des accumulateurs
+		valid_mask = ~np.isnan(result)
+		
+		# Initialisation de la somme selon la forme des données
+		if grid['time_data']['values_sum'] is None:
+			grid['time_data']['values_sum'] = np.zeros_like(result)
+		
+		# Remplacement des NaN par 0 pour l'accumulation
+		result_to_add = np.where(valid_mask, result, 0.0)
+		grid['time_data']['values_sum'] += result_to_add
+		
+		# Mise à jour du compteur pour les cellules valides
+		if result.ndim > len(grid['cell_shape']):  # Cas vectoriel
+			grid['time_data']['count'] += np.any(valid_mask, axis=-1)
+		else:  # Cas scalaire
+			grid['time_data']['count'] += valid_mask.astype(int)
+
+	# Calcul de la moyenne temporelle
+	if grid['time_data']['values_sum'] is not None:
+		divisor = grid['time_data']['count']
+		# Gestion de la forme pour les vecteurs
+		if grid['time_data']['values_sum'].ndim > len(grid['cell_shape']):
+			divisor = divisor[..., np.newaxis]
+		
+		# Calcul avec protection division par zéro
+		grid['cell_values'] = np.divide(
+			grid['time_data']['values_sum'], 
+			divisor, 
+			where=divisor > 0,
+			out=np.full_like(grid['time_data']['values_sum'], np.nan))
+	else:
+		grid['cell_values'] = np.full(grid['cell_shape'], np.nan)
+
+	return grid
+
+def compute_instant_values(grid, vtk_file, attribute_name, h, W, component=None):
 	dimensions = grid['dimensions']
 	plane = grid.get('plane', None)
 	dim = 3 if dimensions == '3D' else 2
@@ -1135,12 +1228,8 @@ def compute_grid_values(grid, vtk_file, attribute_name, h, W, component=None):
 		averages[valid_cells] = weighted_sums[valid_cells] / sum_weights[valid_cells]
 		result = averages.reshape(shape)
 	
-	grid['cell_values'] = result
-	grid['cell_values_info'] = {
-		'attribute': attribute_name,
-		'component': component
-	}
-	return grid
+	
+	return result
 
 def spatial_derivative(grid, attribute_name, deriv_axis='x', component=None):
 	

@@ -170,6 +170,6 @@ def load_vtk_files(folder_path, print_files=False, min_timestep=0, max_timestep=
 if __name__ == "__main__":
 
 	source_path = "SPlisHSPlasH/bin/output/free_surface"
-	destination_path = "my_output/local/free_surface/r_4mm"
+	destination_path = "my_output/local/free_surface/r_4mm/reduced_domain"
 
 	transfer_vtk_files(source_path, destination_path)

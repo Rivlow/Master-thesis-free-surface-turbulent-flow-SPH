@@ -30,9 +30,9 @@ def main():
 	maxEmitterParticles = 10000000
 
 	# Physical parameters
-	r = 3 * (mm)                # Particle radius
+	r = 5 * (mm)                # Particle radius
 	particle = 2*r            # Particle diameter
-	U_0 = 0.15 *(m/s)            # Initial velocity
+	U_0 = 0.15/2 *(m/s)            # Initial velocity
 	Fr = isFluvial(False)
 	g = 9.81                  # Gravity
 	rho_0 = 1000              # Reference density
@@ -56,14 +56,14 @@ def main():
 	viscosity_boundary = 1  # Boundary viscosity
 
 	#------XSPH------#
-	xsph_fluid = 0.2
+	xsph_fluid = 0.08
 	xsph_boundary = 0.01
 
 	#------Vorticity------#
 	vorticityMethod = 1        # Micropolar model
-	vorticity = 0.05           # Vorticity coefficient
-	viscosityOmega = 0.03      # Angular viscosity
-	inertiaInverse = 2         # Inverse inertia
+	vorticity = 0.02           # Vorticity coefficient
+	viscosityOmega = 0.1      # Angular viscosity
+	inertiaInverse = 1         # Inverse inertia
 
 	#------Boundary interaction------#
 	boundaryHandlingMethod = 2 # Volume maps
@@ -87,7 +87,7 @@ def main():
 
 	#-------Export settings------#
 	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density;time;dt;mass"
-	clean_output = True
+	clean_output = False
 	FPS = 50
 
 	#-------------------------------#
@@ -99,7 +99,7 @@ def main():
 	Lx_dom = 3*m                # Length
 	Lz_dom = 1.0*m              # Width
 
-	water_height = 100*mm
+	water_height = 200*mm
 	y_init_wood = 1.4*water_height
 	x_entrance = 1.5*m
 
@@ -118,7 +118,7 @@ def main():
 
 	# Emitter configuration
 	Lx_emit = particle
-	Ly_emit = water_height
+	Ly_emit = 2*water_height
 	Lz_emit = Lz_dom - 2*particle
 	Q_init = U_0*Ly_emit*Lz_emit
 

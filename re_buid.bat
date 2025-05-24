@@ -27,8 +27,7 @@ mkdir build
 cd build
 
 echo Configuring project with CMake...
-cmake -G "Visual Studio 17 2022" -A x64 ^
--DCMAKE_MAKE_PROGRAM="C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" ^
+cmake ^
 -DCMAKE_BUILD_TYPE=Release ^
 -DUSE_GPU_NEIGHBORHOOD_SEARCH=OFF ^
 -DCUDA_TOOLKIT_ROOT_DIR="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8" ^
