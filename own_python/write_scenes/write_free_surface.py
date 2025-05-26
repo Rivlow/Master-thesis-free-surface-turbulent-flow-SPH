@@ -18,22 +18,22 @@ def main():
 	# Write JSON file
 	write = True
 	json_path = "SPlisHSPlasH/data/Scenes/free_surface.json"
-	output_path = "SPlisHSPlasH/bin/output/free_surface/r_4mm/reduced_domain/"
+	output_path = "SPlisHSPlasH/bin/output/free_surface"
 
 	#-----------------------------#
 	#    SIMULATION PARAMETER     #
 	#-----------------------------#
 	
 	# Simulation time and step
-	t_end = 200*s
+	t_end = 100*s
 	timeStepSize = 0.001*s
 	sim2D = True
 	maxEmitterParticles = 10000000
 	
 
 	# Physical parameters
-	r = 2 * (mm)               
-	U_0 = 0.4 * (m/s)         
+	r = 4 * (mm)               
+	U_0 = 0.36 * (m/s)         
 	g = 9.81 * (m/s**2)
 	rho_0 = 1000 * (kg/m**3)
 
@@ -42,7 +42,7 @@ def main():
 	# Export settings
 	clean_output = True
 	attr = "pressure acceleration;velocity;angular velocity;p / rho^2;density;time;dt;mass"  # Exported attributes
-	FPS = 1
+	FPS = 2
 	
 	#------Pressure solver------#
 	simulationMethod = 4      # DFSPH
@@ -57,12 +57,12 @@ def main():
 	cflMaxTimeStepSize = 0.01
 	
 	#------Viscosity------#
-	nu = 0                    # Kinematic viscosity
-	viscosityMethod = 0       # No viscosity
+	nu = 1e-6                    # Kinematic viscosity
+	viscosityMethod = 0      # No viscosity
 	viscosityBoundary = 0.0  # Boundary viscosity
 
 	#------XSPH------#
-	xsph_fluid = 0.04
+	xsph_fluid = 0.5
 	xsph_boundary = 0.0
 
 	#------Vorticity------#
@@ -70,6 +70,10 @@ def main():
 	vorticity = 0.02          # Vorticity coefficient
 	viscosityOmega = 0.1     # Angular viscosity
 	inertiaInverse = 1        # Inverse inertia
+
+	#------Surface tension------#
+	surfaceTensionMethod  = 0
+	surfaceTension  = 0.2
 
 	#------Boundary interaction------#
 	boundaryHandlingMethod = 2 # Volume maps
@@ -86,7 +90,7 @@ def main():
 	Ly = 0.1
 	Lz = 1.0
 	Lx_1 = 8/8
-	Lx_2 = 13/8
+	Lx_2 = 13/4
 
 	# Parabola obstacle
 	nb_elem = 10
@@ -94,7 +98,7 @@ def main():
 	parabola_end = parabola_start + 4
 
 	# Emitter 
-	Ly_emit = 0.45 * (m)               # Emitter height
+	Ly_emit = 0.5 * (m)               # Emitter height
 	Lx_emit = particle          # Emitter width
 
 	# Translations
@@ -115,7 +119,7 @@ def main():
 	# Domain bounds
 	x_min = -Lx_emit/2 - 2*r
 	y_min = -2*Ly_emit
-	x_max = parabola_end + Lx_2 + Lx_anim 
+	x_max = parabola_end + Lx_2
 	y_max = -y_min
 	z_min = -y_max
 	z_max = y_max
@@ -251,6 +255,10 @@ def main():
 			# Drag parameters
 			"dragMethod": dragMethod,
 			"drag": drag,
+
+			# Surface tension parameters
+			"surfaceTensionMethod": surfaceTensionMethod,
+			"surfaceTension": surfaceTension,
 			
 			# Visualization
 			"colorMapType": 1,
@@ -302,7 +310,7 @@ def main():
 		"Materials": Materials,
 		"RigidBodies": RigidBodies,
 		"Emitters": Emitters,
-		"AnimationFields": AnimationFields
+		"AnimationFields": AnimationFields,
 	}
 
 	data_save = {

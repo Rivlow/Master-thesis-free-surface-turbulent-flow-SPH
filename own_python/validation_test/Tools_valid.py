@@ -319,8 +319,46 @@ def get_single_slice(vtk_files, attribute,
 
 	return slice_result
 
+def find_bounds(pos, thickness, trans_val, min_coords, max_coords, plane, axis):
+	if plane == 'xy':
+		if axis == 'x':
+			if trans_val is None:
+				bounds = (pos - thickness, min_coords[1], pos + thickness, max_coords[1])
+			else:
+				bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
+		else:  # axis == 'y'
+			if trans_val is None:
+				bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
+			else:
+				bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
+	elif plane == 'xz':
+		if axis == 'x':
+			if trans_val is None:
+				bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
+			else:
+				bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
+		else:  # axis == 'z'
+			if trans_val is None:
+				bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
+			else:
+				bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
 
-def get_multiple_slices(vtk_file, attribute, mean=False,
+	elif plane == 'yz':
+		if axis == 'y':
+			if trans_val is None:
+				bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
+			else:
+				bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
+		else:  # axis == 'z'
+			if trans_val is None:
+				bounds = (min_coords[1], pos - thickness, max_coords[1], pos + thickness)
+			else:
+				bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
+
+	return bounds
+
+
+def get_multiple_slices(vtk_files, attribute, mean=False,
 						plane='xy', axis='x', along=None, thickness=0.1, trans_val=None, component=0, 
 						plot=False, save=False, savepath=None):
 
@@ -338,143 +376,129 @@ def get_multiple_slices(vtk_file, attribute, mean=False,
 	
 	other_axis_idx = axis_dict[other_axis]
 	
-	points = vtk_file.points
+	target_min = along[0]
+	target_max = along[1]
 	
-	min_coords = np.min(points, axis=0)
-	max_coords = np.max(points, axis=0)
+	positions = np.arange(target_min + thickness, target_max - thickness, 2*thickness)
 	
-	if along is None:
-		target_min = min_coords[target_idx]
-		target_max = max_coords[target_idx]
-	else:
-		target_min = along[0]
-		target_max = along[1]
+	all_slice = []
 	
-	positions = np.arange(target_min + thickness, target_max - thickness, thickness)
-	
-	slice_result = []
-	
-	# Create slice depending on plane and projected axis
-	for pos in positions:
-		
-		if plane == 'xy':
-			if axis == 'x':
-				if trans_val is None:
-					bounds = (pos - thickness, min_coords[1], pos + thickness, max_coords[1])
-				else:
-					bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
-			else:  # axis == 'y'
-				if trans_val is None:
-					bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
-				else:
-					bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
-		elif plane == 'xz':
-			if axis == 'x':
-				if trans_val is None:
-					bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
-				else:
-					bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
-			else:  # axis == 'z'
-				if trans_val is None:
-					bounds = (min_coords[0], pos - thickness, max_coords[0], pos + thickness)
-				else:
-					bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
+	for vtk in vtk_files:
 
-		elif plane == 'yz':
-			if axis == 'y':
-				if trans_val is None:
-					bounds = (pos - thickness, min_coords[2], pos + thickness, max_coords[2])
-				else:
-					bounds = (pos - thickness, trans_val[0], pos + thickness, trans_val[1])
-			else:  # axis == 'z'
-				if trans_val is None:
-					bounds = (min_coords[1], pos - thickness, max_coords[1], pos + thickness)
-				else:
-					bounds = (trans_val[0], pos - thickness, trans_val[1], pos + thickness)
-		
-		_, mask = project_line(
-			points=points,
-			plane=plane,
-			axis=axis,
-			fixed_coord=pos,
-			bounds=bounds,
-			thickness=thickness
-		)
-		
-		if np.any(mask):
+		points = vtk.points
+		min_coords = np.min(points, axis=0)
+		max_coords = np.max(points, axis=0)
 
-			slice_points = points[mask]
-			attr_values = vtk_file.point_data[attribute][mask]
-			other_axis_coords = slice_points[:, other_axis_idx]
-
-			# Sort by increasing order for transversal axis
-			sort_idx = np.argsort(other_axis_coords)
-			other_axis_coords = other_axis_coords[sort_idx]
-			attr_values = attr_values[sort_idx]
+		slice_result = []
+		for pos in positions:
+		
+			bounds = find_bounds(pos, thickness, trans_val, min_coords, max_coords, plane, axis)	
 			
-			if component is not None and attr_values.ndim > 1:
-				attr_values = attr_values[:, component]
-
-			if mean:
-				attr_values = np.mean(attr_values)
+			_, mask = project_line(
+				points=points,
+				plane=plane,
+				axis=axis,
+				fixed_coord=pos,
+				bounds=bounds,
+				thickness=thickness
+			)
 			
-			slice_result.append({
-				'position': pos,
-				'values': attr_values,
-				'coordinates': other_axis_coords,
-				'name': attribute,
-				'dt':vtk_file['dt'][0],
-				'time':vtk_file['time'][0]
-			})
+			if np.any(mask):
+
+				slice_points = points[mask]
+				attr_values = vtk.point_data[attribute][mask]
+				other_axis_coords = slice_points[:, other_axis_idx]
+
+				# Sort by increasing order for transversal axis
+				sort_idx = np.argsort(other_axis_coords)
+				other_axis_coords = other_axis_coords[sort_idx]
+				attr_values = attr_values[sort_idx]
+				
+				if component is not None and attr_values.ndim > 1:
+					attr_values = attr_values[:, component]
+
+				if mean:
+					attr_values = np.mean(attr_values)
+				
+				slice_result.append({
+					'position': pos,
+					'values': attr_values,
+					'coordinates': other_axis_coords,
+					'name': attribute,
+					'dt':vtk['dt'][0],
+					'time':vtk['time'][0]
+				})
+
+	
+		all_slice.append(slice_result)
+			
+	return all_slice
+
+def compute_E_tot(vtk_files, mass_slices, u_slices, v_slices, p_rho2_slices, g=9.81, plot=False, save=False, savepath=None):
+
+	# E_tot = E_cin + E_pot + E_in = m*v^2/2 + m*g*h + P*m/rho (friction ignored)
+	E_tot = [np.sum(vtk.point_data['mass'] * (0.5 * np.sum(vtk.point_data['velocity']**2, axis=1) + g * vtk.points[:, 1])) for vtk in vtk_files]
+	time = [vtk.point_data['time'][0] for vtk in vtk_files]
+
+	dt = np.diff(time)
+	dE = np.diff(E_tot)
+
+	last_vtk = vtk_files[-1]
+	E_tot_slice = []
+	span = []
+	# Local E_tot (per slice of the domain) 
+	for mass, u, v, p_r2 in zip(mass_slices, u_slices, v_slices, p_rho2_slices):
+		E_tot_slice.append(np.sum(mass['values'] * (0.5 * (u['values']**2 + v['values']**2) + g * mass['coordinates'])))
+		span.append(7+u['position'])
+
+	plt.figure()
+	plt.bar(span, E_tot_slice, alpha=0.7, color='royalblue', width=span[1]-span[0])
+
 
 	if plot:
-		plt.figure()
-		if mean:
-			store_val = []
-			positions = []
-			name, dim = get_name(slice_result[0])
-			
-			for slice in slice_result:
-				store_val.append(np.mean(slice['values']))
-				positions.append(slice['position'])
-			
-			positions = np.array(positions)
-			store_val = np.asarray(store_val)
-			
-			mean_values = np.mean(store_val)
-			std_values = np.std(store_val)
 
-			plt.plot(positions, store_val, 'b-o')
-			
-			plt.axhline(y=mean_values, color='blue', linestyle='-', label=r'$\mu$(u)')
-			
-			plt.axhspan(mean_values - std_values, mean_values + std_values, 
-						alpha=0.2, color='red', label=r'$\sigma$(u)')
-			
+		# Plot E(t)
+		fig, ax = plt.subplots(figsize=(10, 6))
+		ax.plot(time, E_tot, 'b-o')
+		ax.set_xlabel('Time t [s]')
+		ax.set_ylabel(r'Total energy $E_{tot}$ [J]')
 
-			plt.grid()
-			plt.ylabel(f'{name}({other_axis}) [{dim}]')
-			plt.xlabel(f'{axis} [m]')
-			plt.legend()
-			plt.ylim((0.9*np.min(store_val), 1.1*np.max(store_val)))
-			plt.tight_layout()
+		'''
+		ax.set_xlim((0, 80))
+		ax.set_xticks(np.arange(0, 81, 10))
+		ax.set_ylim(0, 6000)
+		ax.set_yticks(np.arange(0, 6000+1000, 1000))
+		'''
+		ax.grid(True, linestyle='--', alpha=0.5)
+		plt.tight_layout()
 
-			if save and savepath is not None:
-				plt.savefig(f'{savepath}_mean_mult.pdf', dpi=300)
-		else:
-			name, dim = get_name(slice_result[0])
-			for slice in slice_result:
-				plt.scatter(slice['coordinates'], slice['values'], s=5)
-				plt.ylabel(f'{name}({other_axis}) [{dim}]')
-				plt.xlabel(f'{other_axis} [m]')
-			plt.tight_layout()
-
-
-			if save and savepath is not None:
-				plt.savefig(f'{savepath}_mult.pdf', dpi=300)
-			
+		if save and savepath is not None:
+			plt.savefig(f'{savepath}E_tot.pdf', bbox_inches="tight", dpi=300)
 	
-	return slice_result
+
+		# Plot dE(t)/dt
+		fig, ax = plt.subplots(figsize=(10, 6))
+		plt.plot(time[:-1], dE, 'b-o')
+		
+		ax.set_xlabel('Time t [s]')
+		ax.set_ylabel(r'Generated power $dE_{tot}/dt$ [W]')
+		'''
+		ax.set_xlim((0, 80))
+		ax.set_xticks(np.arange(0, 81, 10))
+		ax.set_ylim(0, 500)
+		ax.set_yticks(np.arange(-50, 500+50, 100))
+		'''
+		ax.grid(True, linestyle='--', alpha=0.5)
+
+		plt.tight_layout()
+
+		if save and savepath is not None:
+			plt.savefig(f'{savepath}dE_tot.pdf', bbox_inches="tight", dpi=300)
+
+	return E_tot, time, dE, dt
+
+
+
 	
 
 def spatial_derivative__(slices, chosen_axis, plot=False, save=False, savepath=None):

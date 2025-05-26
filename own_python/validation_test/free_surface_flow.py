@@ -16,6 +16,7 @@ import pyvista as pv
 from scipy.optimize import fsolve
 from scipy.interpolate import splev, splrep
 from scipy import stats
+import matplotlib
 
 
 # Local imports
@@ -31,6 +32,9 @@ plt.rc('xtick', labelsize=MEDIUM_SIZE)
 plt.rc('ytick', labelsize=MEDIUM_SIZE)
 plt.rc('legend', fontsize=SMALL_SIZE)
 plt.rc('figure', titlesize=BIGGER_SIZE)
+
+matplotlib.rcParams['text.latex.preamble'] = r'\usepackage{amsmath}'
+
 
 def configure_latex():
 	plt.rc('text', usetex=True)
@@ -199,20 +203,31 @@ def extract_water_height(vtk_file, mask=None, plot=False, save=False):
 		bin_velocity = sorted_velocity[mask]
 		
 		if len(bin_points) > 0:
-
 			max_y_index = np.argmax(bin_points[:, 1])  # index of y_max
 			min_y_index = np.argmin(bin_points[:, 1])
+			
+			# Calculer la norme de vitesse pour chaque particule
+			velocity_magnitudes = np.linalg.norm(bin_velocity, axis=1)
+			
+			# Vitesse caractéristique = moyenne des normes de vitesse
+			u_characteristic = np.mean(velocity_magnitudes)
+			
+
 
 			u.append(bin_velocity[max_y_index])
-
+			
 			y_topo = bin_points[min_y_index, 1]
 			y_surface = bin_points[max_y_index, 1]
 			h_local = y_surface - y_topo
 			h.append(y_surface)
 			pos_top.append(bin_points[max_y_index])
-			Fr.append(np.linalg.norm(bin_velocity[max_y_index]) / np.sqrt(g * h_local))
-			Head_abs.append(y_surface + np.linalg.norm(bin_velocity[max_y_index])**2/(2*g))
-			Head_rel.append(h_local + np.linalg.norm(bin_velocity[max_y_index])**2/(2*g))
+			
+			# Froude avec la vitesse caractéristique
+			Fr.append(u_characteristic / np.sqrt(g * h_local))
+			
+			# Charge avec la vitesse caractéristique
+			Head_abs.append(y_surface + u_characteristic**2 / (2 * g))
+			Head_rel.append(h_local + u_characteristic**2 / (2 * g))
 	
 	h = np.asarray(pos_top)
 	u = np.asarray(u)
@@ -277,8 +292,8 @@ def compute_theoretical_water_height(Q_init=0.18, nb_points=500):
 	H_aval = 0 + h_aval + q**2/(2*g*h_aval**2)
 
 	nb_elem = nb_points
-	x_amont = np.linspace(0, x_ressaut, nb_elem//3+1)
-	x_aval = np.linspace(25, x_ressaut, nb_elem//3)
+	x_amont = np.linspace(0, x_ressaut, nb_elem)
+	x_aval = np.linspace(25, x_ressaut, nb_elem)[:-1]
 
 	# Topography
 	z_aval = np.array([z_b(x) for x in x_aval])
@@ -288,8 +303,8 @@ def compute_theoretical_water_height(Q_init=0.18, nb_points=500):
 	h_amont = np.array([solve_height_amont(q, g, x, z_b, H_amont) for x in x_amont])
 	h_aval = np.array([solve_height_aval(q, g, x, z_b, H_aval) for x in x_aval])
 
-	h_inter = np.linspace(h_amont[-1], h_aval[-1], nb_elem//3+1)
-	x_inter = np.linspace(x_amont[-1], x_aval[-1], nb_elem//3+1)
+	h_inter = np.linspace(h_amont[-1], h_aval[-1], nb_elem)
+	x_inter = np.linspace(x_amont[-1], x_aval[-1], nb_elem)
 	z_inter = np.array([z_b(x) for x in x_inter])
 
 	# Froude numbers over whole distance
@@ -492,43 +507,49 @@ def plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False, savepath=
 	h_sph[:, 1] -= Ly
 	points[:, 1] -= Ly
 
-	fig, ax1 = plt.subplots(figsize=(10, 6))
+	fig, ax = plt.subplots(figsize=(10, 6))
 
 	# Plot points and surfaces
-	ax1.scatter(points[:, 0], points[:, 1], s=5, color='blue', label='Particles')
-	ax1.scatter(h_sph[:, 0], h_sph[:, 1], s=20, color='orange', label='SPH free surface')
+	ax.scatter(points[:, 0], points[:, 1], s=5, color='blue', alpha=0.2)
+	ax.scatter(h_sph[:, 0], h_sph[:, 1], s=20, color='orange', label='Free surface particle')
 
-	ax1.plot(x_th, z_th, 'k-', label='Topography')
-	ax1.fill_between(x_th, z_th, z_th + h_th, color='lightblue', alpha=0.5)
-	ax1.plot(x_th, h_th + z_th, color='darkblue', label='Theoretical free surface')
+	ax.plot(x_th, z_th,'k-', linewidth=3 , label='Topography')
+	ax.fill_between(x_th, z_th, z_th + h_th, color='lightblue', alpha=0.6)
+	ax.plot(x_th, h_th + z_th, color='darkblue', label='1D model')
 
-	# Plot configuration
-	#ax1.set_xlim(7, 13)
-	ax1.set_xlabel('Distance x [m]')
-	ax1.set_ylabel('Height [m]')
-	ax1.legend(loc='best')
-	ax1.grid(True)
+	ax.set_xlabel('Distance x [m]')
+	ax.set_ylabel('Height [m]')
+	ax.legend(loc='best')
+
+	ax.set_xlim((7, 15))
+	ax.set_xticks(np.arange(7, 15+1, 1))
+	ax.set_ylim(0, 0.5)
+	ax.set_yticks(np.arange(0, 0.6, 0.1))
+	ax.grid(True, linestyle='--', alpha=0.5)
+	ax.legend()
 
 	plt.tight_layout()
 	if save and savepath is not None:
-		plt.savefig(f"{savepath}water_height.pdf", dpi=300)
+		plt.savefig(f"{savepath}water_height.pdf", dpi=300, bbox_inches='tight')
 
 def plot_Fr(x, x_th, Fr, Fr_th, save=False, savepath=None):
 
 	fig, ax = plt.subplots()
 	
-	ax.scatter(x, Fr, s=20, marker='o', color='blue')
-	ax.axhline(y=1, color='red', linestyle='--', linewidth=1.5, label="Fr = 1")
-	plt.plot(x_th, Fr_th, label='Theoretical Froude', color='magenta')
+	ax.scatter(x, Fr, s=20, marker='o', color='blue', label=r'Fr$_{\text{SPH}}$ [-]')
+	plt.plot(x_th, Fr_th, label=r'Fr$_{\text{model}}$ [-]', color='red')
 	
 	ax.set_xlabel('Position x [m]')
 	ax.set_ylabel('Froude number Fr [-]')
-	ax.grid(True, linestyle='--', alpha=0.7)
+	ax.set_xlim((7, 15))
+	ax.set_xticks(np.arange(7, 15+1, 1))
+	ax.set_ylim(0, 3)
+	ax.set_yticks(np.arange(0, 3+0.5, 0.5))
+	ax.grid(True, linestyle='--', alpha=0.5)
 	ax.legend()
-	
 	plt.tight_layout()
-	
-	if save and savepath is None:
+		
+	if save and savepath is not None:
 		plt.savefig(f"{savepath}/Fr_number.pdf", dpi=300, bbox_inches='tight')
 	
 
@@ -543,7 +564,6 @@ def plot_Head(x, H, H_inlet=0, H_outlet=0, save=False,
 	
 	ax.scatter(x_array, H, s=20, marker='o', color='blue', label="Total head")
 	
-
 	ax.axhline(y=H_inlet, xmin=0, xmax=(x_jump-x_array[0])/(x_array[-1]-x_array[0]), 
 			linestyle='--', color='red', linewidth=1.5, label=f"Inlet head ({H_inlet:.4f})")
 	ax.axhline(y=H_outlet, xmin=(x_jump-x_array[0])/(x_array[-1]-x_array[0]), xmax=1, 
@@ -551,8 +571,13 @@ def plot_Head(x, H, H_inlet=0, H_outlet=0, save=False,
 	
 	ax.set_xlabel('Position x [m]')
 	ax.set_ylabel('Total head H [m]')
-	ax.grid(True, linestyle='--')
+	ax.grid(True, linestyle='--', alpha=0.5)
 	ax.legend(loc='upper right')
+
+	ax.set_xlim((7, 15))
+	ax.set_xticks(np.arange(7, 15+1, 1))
+	ax.set_ylim(0.3, 0.55)
+	ax.set_yticks(np.arange(0.3, 0.55, 0.05))
 	
 	plt.tight_layout()
 	
@@ -560,49 +585,73 @@ def plot_Head(x, H, H_inlet=0, H_outlet=0, save=False,
 		plt.savefig(f"{savepath}/head_conservation.pdf", dpi=300, bbox_inches='tight')
 	
 		
-def check_hydrostatic(p_rho2_slices, rho_slices, y_start, y_end, plot=False, save=False, savepath=None):
+def is_hydrostatic(p_rho2_slices, rho_slices, y_start, y_end, plot=False, save=False, savepath=None):
     """
-    Simple verification of hydrostatic pressure distribution.
-    Computes mean pressure for each y-value, performs linear regression,
+    Simple verification of hydrostatic pressure distribution with temporal averaging.
+    Computes mean pressure for each y-value across all timesteps, performs linear regression,
     and compares with theoretical hydrostatic pressure.
     Calculates RMSE between regression-based pressure and theoretical pressure.
-    """
-    # Extract data
-    p_reg = []
-    p_raw = []
-    y_data = []
-    dt = p_rho2_slices[0]['dt']
-    y_range = np.linspace(y_start, y_end, 100)
-    slice_positions = []
-    slice_rmse = []
     
-    for p_rho2, rho in zip(p_rho2_slices, rho_slices):
-        p_r2 = np.array(p_rho2['values'])
-        r = np.array(rho['values'])
-        y_data.append(np.array(p_rho2['coordinates']))
+    Args:
+        p_rho2_slices: List of timesteps, each containing a list of p_rho2 slices
+        rho_slices: List of timesteps, each containing a list of rho slices
+        y_start: Starting y-coordinate
+        y_end: Ending y-coordinate
+        plot: Boolean to generate plots
+        save: Boolean to save plots
+        savepath: Path to save plots
+    """
+    # Initialize lists to store results for all timesteps
+    p_reg_all_time = []
+    p_raw_all_time = []
+    y_data_all_time = []
+    
+    # Get dt from first timestep, first slice
+    dt = p_rho2_slices[0][0]['dt']
+    y_range = np.linspace(y_start, y_end, 100)
+    
+    # Get slice positions from first timestep (assuming they're constant)
+    slice_positions = []
+    for p_rho2_slice in p_rho2_slices[0]:
+        slice_positions.append(p_rho2_slice['position'])
+    
+    # Iterate over timesteps
+    for p_rho2_timestep, rho_timestep in zip(p_rho2_slices, rho_slices):
+        p_reg_timestep = []
+        p_raw_timestep = []
+        y_data_timestep = []
         
-        # Calculer la pression
-        pressure = p_r2 * r/(dt*dt)
-        p_raw.append(pressure)
+        # Iterate over slices in this timestep
+        for p_rho2, rho in zip(p_rho2_timestep, rho_timestep):
+            p_r2 = np.array(p_rho2['values'])
+            r = np.array(rho['values'])
+            y_data_timestep.append(np.array(p_rho2['coordinates']))
+            
+            # Calculer la pression
+            pressure = p_r2 * r / (dt * dt)
+            p_raw_timestep.append(pressure)
+            
+            # Faire la régression sur tout le tableau
+            slope, intercept, r_value, p_value, std_err = stats.linregress(
+                np.array(p_rho2['coordinates']), pressure
+            )
+            
+            # Calculer la ligne de régression
+            p_regression = slope * y_range + intercept
+            p_reg_timestep.append(p_regression)
         
-        # Faire la régression sur tout le tableau
-        slope, intercept, r_value, p_value, std_err = stats.linregress(np.array(p_rho2['coordinates']), pressure)
-        
-        # Calculer la ligne de régression
-        p_regression = slope * y_range + intercept
-        p_reg.append(p_regression)
-        
-        # Enregistrer la position de la tranche pour affichage ultérieur
-        slice_positions.append(p_rho2['position'])
-
-    if plot:
-        plt.figure(figsize=(10, 6))
-        for y_val, p_raw_val, p_reg_val in zip(y_data, p_raw, p_reg):
-            plt.scatter(y_val, p_raw_val, s=1)
-            plt.plot(y_range, p_reg_val)
-
-    # Calcul de la pression moyenne issue des régressions
-    p_mean = np.mean(p_reg, axis=0)
+        p_reg_all_time.append(p_reg_timestep)
+        p_raw_all_time.append(p_raw_timestep)
+        y_data_all_time.append(y_data_timestep)
+    
+    # Convertir en arrays numpy pour faciliter le calcul
+    p_reg_all_time = np.array(p_reg_all_time)  # shape: (n_timesteps, n_slices, n_y_points)
+    
+    # Moyenner d'abord sur les timesteps
+    p_reg_time_averaged = np.mean(p_reg_all_time, axis=0)  # shape: (n_slices, n_y_points)
+    
+    # Puis moyenner sur les slices pour obtenir la pression moyenne finale
+    p_mean = np.mean(p_reg_time_averaged, axis=0)  # shape: (n_y_points,)
     
     # Calcul de la pression théorique
     g = 9.81  # gravitational acceleration
@@ -612,36 +661,63 @@ def check_hydrostatic(p_rho2_slices, rho_slices, y_start, y_end, plot=False, sav
     squared_errors = (p_mean - p_theoretical)**2
     global_rmse = np.sqrt(np.mean(squared_errors))
     
-    # Calcul du RMSE pour chaque tranche
-    for p_regression in p_reg:
+    # Calcul du RMSE pour chaque tranche (après moyennage temporel)
+    slice_rmse = []
+    for p_regression in p_reg_time_averaged:
         tranche_squared_errors = (p_regression - p_theoretical)**2
         tranche_rmse = np.sqrt(np.mean(tranche_squared_errors))
         slice_rmse.append(tranche_rmse)
     
     if plot:
-        # Figure 1: Pression vs hauteur
+        # Figure 1: Pression vs hauteur (moyennée en temps)
         plt.figure(figsize=(10, 6))
-        plt.plot(y_range, p_mean, 'k-', label='Mean Regression', linewidth=2)
+        plt.plot(y_range, p_mean, 'k-', label='Mean Regression (time-averaged)', linewidth=2)
         plt.plot(y_range, p_theoretical, 'r--', label='Theoretical Hydrostatic Pressure', linewidth=2)
         plt.xlabel('Hauteur y [m]')
         plt.ylabel('Pression [Pa]')
-        plt.title(f'Pression (RMSE globale = {global_rmse:.3f} Pa)')
+        plt.title(f'Pression moyennée en temps (RMSE globale = {global_rmse:.3f} Pa)')
         plt.legend()
         plt.grid(True, alpha=0.7)
         
-        # Figure 2: RMSE par tranche
+        if save and savepath:
+            plt.savefig(f'{savepath}_pressure_vs_height.pdf', dpi=300)
+        
+        # Figure 2: RMSE par tranche (après moyennage temporel)
         plt.figure(figsize=(10, 6))
         plt.plot(slice_positions, slice_rmse, 'o-', color='red')
         plt.ylabel('RMSE [Pa]')
         plt.xlabel('Position x [m]')
-        plt.title('RMSE par tranche')
+        plt.title('RMSE par tranche (après moyennage temporel)')
         plt.grid(True)
+        
+        if save and savepath:
+            plt.savefig(f'{savepath}_rmse_by_slice.pdf', dpi=300)
+        
+        # Figure 3: Évolution temporelle de la pression moyenne (optionnel)
+        # Montrer comment la pression moyenne varie dans le temps pour quelques hauteurs
+        plt.figure(figsize=(10, 6))
+        n_heights = 5
+        height_indices = np.linspace(0, len(y_range)-1, n_heights, dtype=int)
+        
+        for idx in height_indices:
+            # Moyenner sur les slices pour chaque timestep
+            p_at_height = np.mean(p_reg_all_time[:, :, idx], axis=1)
+            timesteps = np.arange(len(p_reg_all_time))
+            plt.plot(timesteps, p_at_height, 'o-', label=f'y = {y_range[idx]:.2f} m')
+        
+        plt.xlabel('Timestep')
+        plt.ylabel('Pression [Pa]')
+        plt.title('Évolution temporelle de la pression à différentes hauteurs')
+        plt.legend()
+        plt.grid(True)
+        
+        if save and savepath:
+            plt.savefig(f'{savepath}_temporal_evolution.pdf', dpi=300)
         
         plt.tight_layout()
         
-        if save and savepath:
-            plt.savefig(savepath)
-        plt.show()
+        if not save:
+            plt.show()
     
     return p_mean, p_theoretical, y_range, global_rmse, slice_rmse, slice_positions
 

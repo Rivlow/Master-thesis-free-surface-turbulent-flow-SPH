@@ -9,9 +9,7 @@
 - [Project Structure](#project-structure)
 - [Usage](#usage)
 - [Technical Specifications](#technical-specifications)
-- [Contributing](#contributing)
 - [Acknowledgements](#acknowledgements)
-- [License](#license)
 
 ## Synopsis
 
@@ -104,20 +102,29 @@ Utility script that automatically copies simulation outputs from the default loc
 
 ### Running a Simulation
 
-1. **Generate Scene Parameters**
+1. **CReate python virtual environment**
+	```bash
+	python -m venv venv
+	venv\Scripts\activate.bat
+	pip install ensurepath
+	```
+
+2. **Generate Scene Parameters**
    ```bash
    python own_python/write_scenes/wrte_free_surface.py
    ```
 
-2. **Execute Simulation**
+3. **Execute Simulation**
    ```bash
    run_simulation.bat
    ```
 
-3. **Organize Outputs**
+4. **Organize Outputs**
    ```bash
    python own_python/Transfer_data.py
    ```
+
+One reminds that the activate.bat script should always be used when creating terminal session.
 
 ### Modifying Simulation Parameters
 

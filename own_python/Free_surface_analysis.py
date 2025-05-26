@@ -50,8 +50,8 @@ def main():
 	all_vtk = load_vtk_files(vtk_folder, print_files=False, min_timestep=0)
 	last_vtk = all_vtk[-1]
 
-	savepath = 'Pictures/CH5_valid_test/free_surface/'
-	#configure_latex()
+	savepath = 'Pictures/CH6_valid_test/free_surface/'
+	configure_latex()
 	
 	# Dimensions
 	Lx_1 = 4.5 * (m)
@@ -63,62 +63,43 @@ def main():
 	Q_init = np.max(y_pos)*U_0
 
 	common_mult = {
-		'vtk_file': last_vtk,
-		'plane': 'xy',
-		'axis': 'x',
-		'along': [0, 24],
-		'trans_val': [0.05, 0.3],
-		'thickness': 10*particle,
-	}
-
-	common_single = {
 		'vtk_files': all_vtk,
 		'plane': 'xy',
 		'axis': 'x',
-		'fixed_coord': 5 * (m),
-		'thickness': 2.5,
+		'along': [0, 8.5],
+		'trans_val': None,
+		'thickness': 5*particle,
 	}
 
+	#=============================================#
+	#               Check assumptions             #
+	#=============================================#
+	
+	u_slices = get_multiple_slices(**common_mult, attribute='velocity', component=0)
+	v_slices = get_multiple_slices(**common_mult, attribute='velocity', component=1)
+	
+	rho_slices = get_multiple_slices(**common_mult, attribute='density')
+	mass_slices = get_multiple_slices(**common_mult, attribute='mass')
+	p_rho2_slices = get_multiple_slices(**common_mult, attribute='p_/_rho^2')
 	
 
-	#-------------------#
-	#   Main analysis   #
-	#-------------------#
+	#-------------- Steady state ---------------#
+	#E_tot, time, dE, dt = compute_E_tot(all_vtk, mass_slices[-1], u_slices[-1], v_slices[-1], p_rho2_slices[-1], plot=True, save=True, savepath=savepath)
 
-	points, h_sph, u_sph, Fr_sph, Head_rel_sph, Head_abs_sph = extract_water_height(all_vtk[-1], plot=False, save=False)
-	
-	points[:,1] += 0.015
-	h_sph[:,1] += 0.015
 
-	points[:,0] += 7
-	h_sph[:,0] += 7
-	x_th, z_th, h_th, Fr_th, H_inlet, H_outlet = compute_theoretical_water_height(Q_init, nb_points=len(h_sph[:,1]))
-
-	#plot_Fr(h_sph[:,0], x_th, Fr_sph, Fr_th, save=True, savepath=savepath)
-	#plot_Head(h_sph[:,0], Head_abs_sph, H_inlet, H_outlet, save=True, savepath=savepath)
-	
-	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=False, savepath=savepath)
-
-	
-	
-	#---------------------------------------------#
-	#   Hydrostatic/velocity check  (global form) #
-	#---------------------------------------------#
-	#u_mult = get_multiple_slices(**common_mult, attribute='velocity',component=0)
-	p_rho2_mult = get_multiple_slices(**common_mult, attribute='p_/_rho^2')
-	rho_mult = get_multiple_slices(**common_mult, attribute='density')
-	#check_hydrostatic(p_rho2_mult, rho_mult, 0, 0.33, plot=True, save=False)
-
+	#-------- Uniform velocity profile ---------#
 	#is_uniform(u_mult, save=False, savepath=savepath)
-	#rho_slices  = get_multiple_slices(**common_mult, attribute='density')
-	#Q_v, Q_m = compute_flow_rate(Q_init, 1000, u_slices, rho_slices, plot=True, save=True, savepath = savepath+'/free_surface_')
-	#plot_vtk(all_vtk[-1], mask=None, attribute='angular_velocity', is_plt=True, save=False, savepath=savepath+'/vorticity')
 
+
+	#----------- Hydrostatic pressure ----------#
 	
+	#is_hydrostatic(p_rho2_slices[80:], rho_slices[80:], 0, 0.33, plot=True, save=False)
 
-	#--------------------------------------#
-	#   Derivative analysis (local form)   #
-	#--------------------------------------#
+
+	#----------- Incompressibility ------------#
+	#rho_slices  = get_multiple_slices(**common_mult, attribute='density')
+	#Q_v, Q_m = compute_flow_rate(Q_init, 1000, u_slices[-1], rho_slices[-1], plot=True, save=False, savepath = savepath+'/free_surface_')
+	#plot_vtk(all_vtk[-1], mask=None, attribute='angular_velocity', is_plt=True, save=False, savepath=savepath+'/vorticity')
 
 	'''
 	bounds = {'x_min':0, 'y_min':0, 'x_max':25,'y_max':1, 'z_min':0,'z_max':0}
@@ -135,6 +116,28 @@ def main():
 	plt.figure()
 	plt.imshow(d_rho_dx.T, origin='lower', aspect='auto')
 	'''
+
+
+	
+
+	#===================#
+	#   Main analysis   #
+	#===================#
+
+	points, h_sph, u_sph, Fr_sph, Head_rel_sph, Head_abs_sph = extract_water_height(all_vtk[-1], plot=False, save=False)
+	
+	points[:,1] += 2*particle
+	h_sph[:,1] += 2*particle
+
+	points[:,0] += 7
+	h_sph[:,0] += 7
+	x_th, z_th, h_th, Fr_th, H_inlet, H_outlet = compute_theoretical_water_height(Q_init, nb_points=len(h_sph[:,1]))
+	
+	
+	#plot_Fr(h_sph[:,0], x_th, Fr_sph, Fr_th, save=True, savepath=savepath)
+	#plot_Head(h_sph[:,0], Head_abs_sph, H_inlet, H_outlet, save=True, savepath=savepath)
+	plot_water_height(Ly, x_th, z_th, h_th, points, h_sph, save=True, savepath=savepath)
+	
 
 
 	plt.show()
