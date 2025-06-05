@@ -1,5 +1,7 @@
 # 3D Turbulent Free-Surface Flow Simulation with SPH Method
 
+![Demo](Bridge_final_r_5mm.gif)
+
 ## Table of Contents
 
 - [Synopsis](#synopsis)
@@ -141,7 +143,7 @@ All simulations are particle size-independent. To change spatial resolution:
 - **GPU**: 
   - NVIDIA GeForce RTX 4070 Laptop GPU
   - Intel Arc Graphics
-- **OS**: Windows
+- **OS**: Windows 11
 
 ### Software Stack
 - **Build system**: CMake 3.31.7
