@@ -111,7 +111,7 @@ Utility script that automatically copies simulation outputs from the default loc
 
 2. **Generate scene parameters**
    ```bash
-   python own_python/write_scenes/wrte_free_surface.py
+   python python_scripts/Turbulent/write_turbulent_pipe.py
    ```
 
 3. **Execute simulation**
@@ -121,7 +121,7 @@ Utility script that automatically copies simulation outputs from the default loc
 
 4. **Organize outputs**
    ```bash
-   python own_python/Transfer_data.py
+   python python_scripts/Transfer_data.py
    ```
 
 One reminds that the activate.bat script should always be used when creating terminal session.
