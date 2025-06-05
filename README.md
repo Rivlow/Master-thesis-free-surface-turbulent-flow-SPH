@@ -2,7 +2,7 @@
 
 ![Demonstration](demo.gif)
 
-## Table of Contents
+## Table of contents
 
 - [Synopsis](#synopsis)
 - [Features](#features)
@@ -17,7 +17,7 @@
 
 This repository contains the implementation and results of my Master's thesis at the University of Liège (ULiège), focusing on simulating 3D turbulent free-surface flows with dynamic rigid bodies using the Smoothed Particle Hydrodynamics (SPH) method.
 
-### Research Objectives
+### Research objectives
 - Simulate obstacle formation during flood events within a single software framework
 - Leverage [SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH) for its advanced features:
   - Real-time GUI visualization
@@ -26,10 +26,10 @@ This repository contains the implementation and results of my Master's thesis at
 
 ## Features
 
-- **Flexible Simulation Parameters**: Particle size-independent simulations
-- **Automated Workflow**: Batch scripts for building and running simulations
-- **Data Management**: Automated output organization and transfer
-- **Extensible Framework**: Python scripts for scene generation and analysis
+- **Flexible simulation parameters**: Particle size-independent simulations
+- **Automated workflow**: Batch scripts for building and running simulations
+- **Data management**: Automated output organization and transfer
+- **Extensible framework**: Python scripts for scene generation and analysis
 
 ##  Prerequisites
 
@@ -42,14 +42,14 @@ Before building this project, ensure you have the following installed:
 
 ## Installation
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Rivlow/Master-thesis-free-surface-turbulent-flow-SPH.git
 cd Master-thesis-free-surface-turbulent-flow-SPH
 ```
 
-### 2. Build the Project
+### 2. Build the project
 
 Make sure to create a virtual python environment:
 ```bash
@@ -63,7 +63,7 @@ rebuild.bat
 
 **Note**: The build script includes paths to CUDA Toolkit, Python interpreter, and pybind11. You may need to modify these paths in `rebuild.bat` according to your system configuration.
 
-#### Build Options
+#### Build options
 - Set `CLEAN_INSTALL=1` to use the original SPlisHSPlasH source code
 - Set `CLEAN_INSTALL=0` to use modified source code
 
@@ -72,17 +72,17 @@ The build script automatically configures CMake with, for instance:
 - Double precision floating-point
 - GPU utilization for neighborhood search
 
-## Project Structure
+## Project structure
 
 ```
 Master-thesis-free-surface-turbulent-flow-SPH/
 ├── my_output/              # Simulation output data storage
 │   └── local/             
 │       └── my_simulations/
-├── own_python/            # Custom Python scripts
-│   ├── write_scenes/      # Scene generation scripts
+├── python_scripts/            # Custom Python scripts
+│   ├── Tools_global/      # General scripts for data processing
 │   ├── Transfer_data.py   # Output organization utility
-│   └── validation_test/   # Validation and analysis scripts
+│   └── validation_test/   # Validation and analysis scripts (Turbulent/Free_surface/Bridge)
 ├── Pictures/              # Figures for documentation
 ├── SPlisHSPlasH/         # Modified SPH source code
 ├── venv/                 # Python virtual environment
@@ -90,7 +90,7 @@ Master-thesis-free-surface-turbulent-flow-SPH/
 └── run_simulation.bat    # Simulation execution script
 ```
 
-### Key Components
+### Key components
 
 #### `my_output/`
 Organized storage for simulation results, preventing conflicts when running multiple simulations with different parameters.
@@ -106,41 +106,41 @@ Utility script that automatically copies simulation outputs from the default loc
 
 ##  Usage
 
-### Running a Simulation
+### Running a simulation
 
-1. **CReate python virtual environment**
+1. **(If not already) Create python virtual environment**
 	```bash
 	python -m venv venv
 	venv\Scripts\activate.bat
 	pip install ensurepath
 	```
 
-2. **Generate Scene Parameters**
+2. **Generate scene parameters**
    ```bash
    python own_python/write_scenes/wrte_free_surface.py
    ```
 
-3. **Execute Simulation**
+3. **Execute simulation**
    ```bash
    run_simulation.bat
    ```
 
-4. **Organize Outputs**
+4. **Organize outputs**
    ```bash
    python own_python/Transfer_data.py
    ```
 
 One reminds that the activate.bat script should always be used when creating terminal session.
 
-### Modifying Simulation Parameters
+### Modifying simulation parameters
 
 All simulations are particle size-independent. To change spatial resolution:
 1. Adjust particle radius in the scene generation script
 2. Numerical parameters (e.g., `angular_viscosity` for vorticity) may need adjustment
 
-## Technical Specifications
+## Technical specifications
 
-### Hardware Configuration
+### Hardware configuration
 - **Laptop**: ASUS ROG Zephyrus G16 (GU605MI)
 - **RAM**: 32 GB
 - **CPU**: Intel Core Ultra 7 155H @ 3.80 GHz (22 logical processors)
@@ -149,7 +149,7 @@ All simulations are particle size-independent. To change spatial resolution:
   - Intel Arc Graphics
 - **OS**: Windows 11
 
-### Software Stack
+### Software utilised
 - **Build system**: CMake 3.31.7
 - **Programming language**: C++ with Python 3.12.4 bindings
 - **GPU computing**: NVIDIA CUDA Toolkit 12.8
