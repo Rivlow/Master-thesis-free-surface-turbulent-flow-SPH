@@ -95,12 +95,6 @@ Master-thesis-free-surface-turbulent-flow-SPH/
 #### `my_output/`
 Organized storage for simulation results, preventing conflicts when running multiple simulations with different parameters.
 
-#### `own_python/write_scenes/`
-Python scripts that generate JSON parameter files for simulations. Each script defines:
-- `json_path`: Location of simulation parameter file
-- `output_path`: Destination for simulation outputs
-- Automatic generation of summary files with simulation parameters
-
 #### `Transfer_data.py`
 Utility script that automatically copies simulation outputs from the default location to organized folders in `my_output/`.
 
