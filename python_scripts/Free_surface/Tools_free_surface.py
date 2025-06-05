@@ -265,7 +265,7 @@ def extract_water_height(vtk_file, mask=None, plot=False, save=False):
 	return pos, pos_top, u_top, Fr, Head_rel, Head_abs
 
 
-def compute_theoretical_water_height(Q_init=0.18, nb_points=500):
+def compute_theoretical_water_height(Q_init=0.18, nb_points=2000):
 	"""
 	Calculate the theoretical water height.
 
@@ -517,7 +517,7 @@ def plot_water_height(particle, x_th=None, z_th=None, h_th=None, points=None, h_
 		for points_i, h_sph_i, label_i in zip(points, h_sph, label):
 			h_sph_i[:, 1] += particle
 			points_i[:, 1] += particle
-			#ax.scatter(points_i[:, 0], points_i[:, 1], s=5, color='blue', alpha=0.2)
+			#ax.scatter(points_i[:, 0], points_i[:, 1], s=20, color='blue', alpha=0.2)
 			ax.scatter(h_sph_i[:, 0], h_sph_i[:, 1], s=20, label=label_i)
 	else:
 
@@ -525,7 +525,7 @@ def plot_water_height(particle, x_th=None, z_th=None, h_th=None, points=None, h_
 		points[:, 1] += particle
 
 		# Plot points and surfaces
-		ax.scatter(points[:, 0], points[:, 1], s=5, color='blue', alpha=0.2)
+		ax.scatter(points[:, 0], points[:, 1], s=20, color='blue', alpha=0.2)
 		ax.scatter(h_sph[:, 0], h_sph[:, 1], s=20, color='orange', label='Free surface particle')
 
 	if x_th is not None and z_th is not None and h_th is not None:
@@ -546,8 +546,8 @@ def plot_water_height(particle, x_th=None, z_th=None, h_th=None, points=None, h_
 
 	ax.set_xlim((0, 3.5))
 	#ax.set_xticks(np.arange(7, 15+1, 1))
-	ax.set_ylim(0, 0.45)
-	ax.set_yticks(np.linspace(0, 0.45, 5))
+	ax.set_ylim(0, 0.3)
+	ax.set_yticks(np.linspace(0, 0.3, 5))
 	ax.grid(True, linestyle='--', alpha=0.5)
 	ax.legend()
 
@@ -555,25 +555,83 @@ def plot_water_height(particle, x_th=None, z_th=None, h_th=None, points=None, h_
 	if save and savepath is not None:
 		plt.savefig(f"{savepath}water_height.pdf", dpi=30, bbox_inches='tight')
 
-def plot_Fr(x, x_th, Fr, Fr_th, save=False, savepath=None):
+def plot_Fr(x, Fr, x_th=None, Fr_th=None, label=None, label_th=None, 
+			colors=None, color_th='red', save=False, savepath=None):
+	"""
+	Plot Froude number with support for multiple datasets.
+	
+	Args:
+		x (array or list of arrays): SPH x positions (single or multiple datasets)
+		Fr (array or list of arrays): SPH Froude numbers (single or multiple)
+		x_th (array or list of arrays): Theoretical x positions (default: None)
+		Fr_th (array or list of arrays): Theoretical Froude numbers (default: None)
+		label (str or list of str): Label(s) for SPH data (default: None)
+		label_th (str or list of str): Label(s) for theoretical data (default: None)
+		colors (str or list of str): Color(s) for SPH data (default: None)
+		color_th (str or list of str): Color(s) for theoretical data (default: 'red')
+		save (bool): Save figure if True (default: False)
+		savepath (str): Save path for figure (default: None)
+	"""
+	fig, ax = plt.subplots(figsize=(12, 6))
+	
+	# Default labels setup
+	default_labels = [f'SPH {i+1}' for i in range(10)]
+	default_label_th = r'Fr$_{\text{model}}$ [-]'
+	
+	# Handle SPH data (single or multiple)
+	if isinstance(x, list) and isinstance(Fr, list):
+		n = len(x)
+		# Generate labels if not provided
+		sph_labels = label if label else default_labels[:n]
+		# Generate colors if not provided
+		sph_colors = colors if colors else plt.cm.tab10(range(n))
+		
+		for i, (x_i, Fr_i) in enumerate(zip(x, Fr)):
+			ax.scatter(
+				x_i, Fr_i, 
+				s=20, marker='o', 
+				label=sph_labels[i] if i < len(sph_labels) else f'SPH {i}',
+			)
+	else:
+		# Single dataset case
+		sph_label = label if label else r'Fr$_{\text{SPH}}$ [-]'
+		sph_color = colors[0] if isinstance(colors, list) else (colors if colors else 'blue')
+		ax.scatter(x, Fr, s=20, marker='o', label=sph_label, color=sph_color)
 
-	fig, ax = plt.subplots(figsize=(12,6))
-	
-	ax.scatter(x, Fr, s=20, marker='o', color='blue', label=r'Fr$_{\text{SPH}}$ [-]')
-	plt.plot(x_th, Fr_th, label=r'Fr$_{\text{model}}$ [-]', color='red')
-	
+	# Handle theoretical data (single or multiple)
+	if x_th is not None and Fr_th is not None:
+		if isinstance(x_th, list) and isinstance(Fr_th, list):
+			n_th = len(x_th)
+			# Generate labels if not provided
+			th_labels = label_th if label_th else [f'{default_label_th} {i+1}' for i in range(n_th)]
+			# Handle colors (single or list)
+			th_colors = color_th if isinstance(color_th, list) else [color_th] * n_th
+			
+			for i, (x_th_i, Fr_th_i) in enumerate(zip(x_th, Fr_th)):
+				ax.plot(
+					x_th_i, Fr_th_i, 
+					label=th_labels[i] if i < len(th_labels) else f'Model {i}',
+					color=th_colors[i]
+				)
+		else:
+			# Single theoretical curve
+			th_label = label_th if label_th else default_label_th
+			th_color = color_th[0] if isinstance(color_th, list) else color_th
+			ax.plot(x_th, Fr_th, label=th_label, color=th_color)
+
+	# Plot configuration
 	ax.set_xlabel('Position x [m]')
 	ax.set_ylabel('Froude number Fr [-]')
-	ax.set_xlim((7, 15))
-	ax.set_xticks(np.arange(7, 15+1, 1))
-	ax.set_ylim(0, 3)
-	ax.set_yticks(np.arange(0, 3+0.5, 0.5))
+	ax.set_xlim(0, 3.5)
+	ax.set_xticks(np.linspace(0, 3.5, 7))
+	ax.set_ylim(0, 1)
+	ax.set_yticks(np.linspace(0, 1, 5))
 	ax.grid(True, linestyle='--', alpha=0.5)
-	ax.legend()
+	ax.legend(loc='best')
 	plt.tight_layout()
-		
-	if save and savepath is not None:
-		plt.savefig(f"{savepath}/Fr_number.pdf", dpi=30, bbox_inches='tight')
+
+	if save and savepath:
+		plt.savefig(f"{savepath.rstrip('/')}Fr_number.pdf", dpi=300, bbox_inches='tight')
 	
 
 def plot_Head(x, H, label=None, H_inlet=None, H_outlet=None, save=False, 
@@ -612,8 +670,10 @@ def plot_Head(x, H, label=None, H_inlet=None, H_outlet=None, save=False,
 	if save and savepath is not None:
 		plt.savefig(f"{savepath}/head_conservation.pdf", dpi=30, bbox_inches='tight')
 
+
+
 def mean_head(all_vtk, particle, mm=1e-3, 
-			  save=False, savepath=None):
+			save=False, savepath=None):
 		
 		x_min, x_max = 0.0, 3.5  # À adapter selon votre domaine
 		x_common = np.linspace(x_min, x_max, 500)  # Grille fixe de 500 points
@@ -642,8 +702,8 @@ def mean_head(all_vtk, particle, mm=1e-3,
 
 		# Tracé du résultat
 		plt.figure(figsize=(12, 6))
-		plt.scatter(x_common, Head_mean_1, s=5, label='Slice z = 150 mm')
-		plt.scatter(x_common, Head_mean_2, s=5, label='Slice z = -150 mm')
+		plt.scatter(x_common, Head_mean_1, s=20, label='Slice z = 150 mm')
+		plt.scatter(x_common, Head_mean_2, s=20, label='Slice z = -150 mm')
 
 		plt.xlabel('Position x [m]')
 		plt.xlim(x_min, x_max)
@@ -655,13 +715,13 @@ def mean_head(all_vtk, particle, mm=1e-3,
 
 
 		plt.grid(True, alpha=0.4, ls="--")
-		plt.ylim(0.15, 0.4)
-		plt.yticks(np.arange(0.15, 0.4+0.05, 0.05))
+		plt.ylim(0, 0.4)
+		#plt.yticks(np.arange(0.15, 0.4+0.05, 0.05))
 		plt.tight_layout()
 		
 
 		if save and savepath is not None:
-			plt.savefig(f"{savepath}/mean_head.pdf", dpi=30, bbox_inches='tight')
+			plt.savefig(f"{savepath}mean_head.pdf", dpi=30, bbox_inches='tight')
 			
 	
 		

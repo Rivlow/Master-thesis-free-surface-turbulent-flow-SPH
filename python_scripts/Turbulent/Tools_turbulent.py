@@ -190,7 +190,7 @@ def fit_ghe_model(slices, y_min, method='raw', plot=False, save=False, dy=0.01, 
 			plt.scatter(y_data, u_data, s=30, alpha=0.7, color='blue', 
 					label='SPH data')
 		else:
-			plt.scatter(y_data, u_data, s=7, alpha=0.3, color='blue', 
+			plt.scatter(y_data[::5], u_data[::5], s=7, alpha=0.3, color='blue', 
 					label='SPH data')
 		
 		# Plot fitted model

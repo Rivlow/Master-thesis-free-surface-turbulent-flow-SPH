@@ -49,7 +49,7 @@ def plot_results(s_eval, x_particles, y_particles, x_line, y_line,
 	if plot_func:
 
 		fig = plt.figure()
-		plt.plot(s_eval, A1_approx, 'o-', color='blue', markersize=4, alpha=0.5, label='Interpolated function')
+		plt.plot(s_eval, A1_approx, 'o-', color='red', markersize=4, alpha=0.5, label='Interpolated function')
 		plt.plot(s_eval, A1_exact, color='blue', linewidth=2, label='Exact function')
 		plt.xlabel('Representation line')
 		plt.ylabel('Approximation')
@@ -89,8 +89,8 @@ def main():
 	configure_latex()
 
 	kernel_name = "cubic"
-	kernel = extractKernel(kernel_name)
-	gradient = extractGradients(kernel_name)
+	kernel = cubic_kernel
+	gradient = cubic_kernel_gradient
 	
 	# Domain params
 	domain =  [(-2, 0), (2, 1.5)]

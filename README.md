@@ -144,10 +144,11 @@ All simulations are particle size-independent. To change spatial resolution:
 - **OS**: Windows
 
 ### Software Stack
-- **Build System**: CMake 3.31.7
-- **Programming Language**: C++ with Python 3.12.4 bindings
-- **GPU Computing**: NVIDIA CUDA Toolkit 12.8
-- **SPH Framework**: Modified SPlisHSPlasH
+- **Build system**: CMake 3.31.7
+- **Programming language**: C++ with Python 3.12.4 bindings
+- **GPU computing**: NVIDIA CUDA Toolkit 12.8
+- **ParaView version**: ParaView 5.13.3
+- **SPH framework**: Modified SPlisHSPlasH
 
 ## Acknowledgements
 

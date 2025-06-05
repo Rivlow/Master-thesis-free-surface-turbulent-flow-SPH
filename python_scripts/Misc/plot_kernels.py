@@ -31,8 +31,8 @@ def main():
 	configure_latex()  # Activez LaTeX si demandé
 
 	kernel_name = "cubic"
-	kernel_func = extractKernel(kernel_name)
-	gradient_func = extractGradients(kernel_name)    
+	kernel_func = cubic_kernel
+	gradient_func = cubic_kernel_gradient  
 	
 	# Utiliser r/h de 0 à 0.6 comme dans le graphique de référence
 	h = 1.0  # Rayon de lissage

@@ -20,9 +20,9 @@ sys.path.append((os.getcwd()))
 from python_scripts.Tools_scenes import *
 from python_scripts.Transfer_data import *
 from python_scripts.Turbulent.Tools_turbulent import *
-from Free_surface.Tools_free_surface import *
+from python_scripts.Free_surface.Tools_free_surface import *
 from python_scripts.Tools_global import *
-from Misc.kernels import *
+from python_scripts.Misc.kernels import *
 
 
 # Units
@@ -121,8 +121,8 @@ def main():
                                     plot=True, save=True)
 
 	# Version données moyennées
-	delta_binned, gamma_binned = fit_ghe_model(u_single, D/2, method='binned',
-											dy=0.02, plot=True, save=True)
+	#delta_binned, gamma_binned = fit_ghe_model(u_single, D/2, method='binned',
+	#										dy=0.02, plot=True, save=True)
 
 	
 	plt.show()

@@ -124,7 +124,7 @@ def main():
 	Lz_emit = Lz_dom - 2*particle
 
 	Q_init = U_0*Ly_emit*Lz_emit
-	U_out = 0.95*(Q_init/(Lz_dom*Ly_foot))
+	U_out = (Q_init/(Lz_dom*Ly_foot))
 
 	# Animation field configuration
 	Lx_anim = 10*particle
@@ -424,6 +424,7 @@ def main():
 		}
 	]
 
+	'''
 	AnimationFields = [
 		{
 			"particleField": "velocity",
@@ -437,6 +438,7 @@ def main():
 			"expression_z": ""
 		}
 	]
+	'''
 
 	Materials = [
 		{
@@ -531,7 +533,7 @@ def main():
 		"Materials": Materials,
 		"RigidBodies": RigidBodies,
 		"Emitters": Emitters,
-		"AnimationFields": AnimationFields,
+		#"AnimationFields": AnimationFields,
 		"FluidBlocks":FluidBlocks
 	}
 

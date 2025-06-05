@@ -766,12 +766,12 @@ def compute_flow_rate(Q_v_th, rho0,
 				label=fr'Mean Q: {Q_v_mean:.2f} [m$^2$/s]')
 		
 		plt.xlabel('Position x [m]')
-		plt.xlim(0, 45)
-		plt.xticks(np.arange(0, 45+5, 5))
+		#plt.xlim(0, 45)
+		#plt.xticks(np.arange(0, 45+5, 5))
 
 		plt.ylabel(r'Flow rate [m$^2$/s]')
-		plt.ylim(0, 22)
-		plt.yticks(np.linspace(0, 22, 5))
+		#plt.ylim(0, 22)
+		#plt.yticks(np.linspace(0, 22, 5))
 
 
 		plt.grid(True, alpha=0.3, ls="--")
@@ -1859,10 +1859,10 @@ def plot_quiver(x, y, u, v, save=False, savepath=None):
 	ax.set_xlabel('Position x [m]') 
 	ax.set_ylabel('Height [m]') 
 	ax.grid(True, alpha=0.4, ls='--') 
-	ax.set_xlim(1.3, 2.2) 
-	ax.set_xticks(np.linspace(1.3, 2.2, 10)) 
-	ax.set_ylim(0.12, 0.24) 
-	ax.set_yticks(np.linspace(0.12, 0.24, 5)) 
+	#ax.set_xlim(1.3, 2.2) 
+	#ax.set_xticks(np.linspace(1.3, 2.2, 10)) 
+	#ax.set_ylim(0.12, 0.24) 
+	#ax.set_yticks(np.linspace(0.12, 0.24, 5)) 
 	
 	fig.tight_layout()
 

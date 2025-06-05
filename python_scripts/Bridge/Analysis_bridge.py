@@ -19,7 +19,7 @@ plt.rc('figure', titlesize=BIGGER_SIZE)
 sys.path.append((os.getcwd()))
 from python_scripts.Tools_scenes import *
 from python_scripts.Transfer_data import *
-from Free_surface.Tools_free_surface import *
+from python_scripts.Free_surface.Tools_free_surface import *
 from python_scripts.Tools_global import *
 
 
@@ -102,12 +102,13 @@ g = 9.81 * (m/s**2)
 
 def main():
 
-	vtk_folder = "my_output/local/bridge/r_5mm/final"
+	vtk_folder = "my_output/local/bridge/r_5mm/free_surface"
+	#vtk_folder = "my_output/local/bridge/r_5mm/pressurized"
 	savepath = 'Pictures/CH8_final_simulation/'
 	configure_latex()
 
 
-	U_0 = 0.36/2 * (m/s)
+	U_0 = 0.15/2 * (m/s)
 	nu = 1e-6 * (m**2/s)
 	rho = 1e3 * (kg/m**3)
 	r = 5 * (mm)
@@ -126,15 +127,18 @@ def main():
 
 	obstacles = create_bridge_obstacles()
 
-	#mean_head(all_vtk, particle, save=False, savepath=savepath)
+	_, mask_XZ = project_surface(last_vtk.points, "y", 120*mm, thickness=4*particle)
+	_, mask_XY_1 = project_surface(last_vtk.points, "z", 150*mm, thickness=10*particle, bounds=None)
+	_, mask_XY_2 = project_surface(last_vtk.points, "z", -150*mm, thickness=10*particle, bounds=None)
 
-	#plot_Head(x=[h_1[:,0], h_2[:,0]], H=[Head_1, Head_2], label=label, H_inlet=None, H_outlet=None, save=False, savepath=savepath)
+	pos_1, h_1, u_top, Fr_1, Head_rel, Head_abs = extract_water_height(last_vtk, mask=mask_XY_1, plot=False, save=False)
+	pos_2, h_2, u_top, Fr_2, Head_rel, Head_abs = extract_water_height(last_vtk, mask=mask_XY_2, plot=False, save=False)
 
-	_, mask_XZ = project_surface(last_vtk.points, "y", 250*mm, thickness=4*particle)
-	_, mask_XY = project_surface(last_vtk.points, "z", 150*mm, thickness=10*particle, bounds=[1.1*m, 130*mm, -200*mm, 2.2*m, 300*mm, 200*mm])
-
-	pos, pos_top, u_top, Fr, Head_rel, Head_abs = extract_water_height(last_vtk, mask=mask_XY, plot=False, save=False)
-	#plot_water_height(particle, points=pos, h_sph=pos_top, label=None, obstacles=obstacles, save=False, savepath=savepath)
+	#plot_water_height(particle, points=[pos_1, pos_2], h_sph=[h_1, h_2], label=['Slice at z = 150 [mm]', 'Slice at z = -150 [mm]'], obstacles=obstacles, save=True, savepath=savepath+'free_surf_two_')
+	#plot_Fr([h_1[:,0], h_2[:,0]], [Fr_1, Fr_2], label=['Slice at z = 150 [mm]', 'Slice at z = -150 [mm]'], save=True, savepath=savepath+'free_surf_')
+	#mean_head(all_vtk, particle, save=True, savepath=savepath)
+	#plot_Head(x=h[:,0], H=Head_abs, H_inlet=None, H_outlet=None, save=False, savepath=savepath+'free_surf_')
+	
 	
 	position = last_vtk.points[mask_XZ]
 	velocity = last_vtk.point_data['velocity'][mask_XZ]
@@ -142,7 +146,8 @@ def main():
 	x, y, z = position[:, 0], position[:, 1], position[:, 2]
 	u, v, w = velocity[:, 0], velocity[:, 1], velocity[:, 2]
 
-	#plot_quiver(x, y, u, v, save=True, savepath=savepath)
+	#plot_quiver(x, y, u, v, save=False, savepath=savepath+'free_surf_')
+	
 	
 	
 	plot_streamlines(
@@ -150,10 +155,12 @@ def main():
 		plane="XZ", apply_filter=True, min_speed_ratio=0.0,
 		obstacles=obstacles,
 		margin=0.05,
-		nx=15000, ny=15000, density=2,
+		nx=15000, ny=15000, density=1,
 		save=True,
-		savepath=savepath
+		savepath=savepath+'pressurized'
 	)
+
+	
 
 
 
