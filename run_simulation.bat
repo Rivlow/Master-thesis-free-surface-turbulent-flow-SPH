@@ -1,6 +1,13 @@
 @echo off
 setlocal
 
+:: Check venv is activated
+call venv\Scripts\activate.bat
+if %errorlevel% neq 0 (
+    echo Error while running activate.bat
+    exit /b 1
+)
+
 set SCENE_NAME=bridge
 set NO_GUI=0
 

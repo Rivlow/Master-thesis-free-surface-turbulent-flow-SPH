@@ -51,8 +51,12 @@ cd Master-thesis-free-surface-turbulent-flow-SPH
 
 ### 2. Build the Project
 
-The project includes an automated build script for Windows:
+Make sure to create a virtual python environment:
+```bash
+python -m venv venv
+```
 
+Then, the project includes an automated build script for Windows:
 ```bash
 rebuild.bat
 ```
