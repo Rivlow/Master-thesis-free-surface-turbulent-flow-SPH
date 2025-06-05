@@ -1,6 +1,6 @@
 # 3D Turbulent Free-Surface Flow Simulation with SPH Method
 
-![Demo](Bridge_final_r_5mm.gif)
+![Demonstration](demo.gif)
 
 ## Table of Contents
 
