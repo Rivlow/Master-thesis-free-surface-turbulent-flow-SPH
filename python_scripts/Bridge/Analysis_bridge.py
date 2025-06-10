@@ -146,10 +146,10 @@ def main():
 	x, y, z = position[:, 0], position[:, 1], position[:, 2]
 	u, v, w = velocity[:, 0], velocity[:, 1], velocity[:, 2]
 
-	#plot_quiver(x, y, u, v, save=False, savepath=savepath+'free_surf_')
+	plot_quiver(x, y, u, v, save=False, savepath=savepath+'free_surf_')
 	
 	
-	
+	'''
 	plot_streamlines(
 		x, z, u, w,
 		plane="XZ", apply_filter=True, min_speed_ratio=0.0,
@@ -159,6 +159,7 @@ def main():
 		save=True,
 		savepath=savepath+'pressurized'
 	)
+	'''
 
 	
 

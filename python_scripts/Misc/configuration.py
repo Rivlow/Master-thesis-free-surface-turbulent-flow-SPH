@@ -168,7 +168,7 @@ def turbulent_config():
 	
 	# Channel parameters
 	L = 50  # Channel length [m]
-	D = 3.94  # Channel height [m]
+	D = 3.2  # Channel height [m]
 	
 	# Velocity profile parameters
 	U_max = 4.0  # Maximum velocity

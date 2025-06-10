@@ -76,18 +76,18 @@ The build script automatically configures CMake with, for instance:
 
 ```
 Master-thesis-free-surface-turbulent-flow-SPH/
-├── my_output/              # Simulation output data storage
-│   └── local/             
+├── my_output/
+│   └── local/
 │       └── my_simulations/
-├── python_scripts/            # Custom Python scripts
-│   ├── Tools_global/      # General scripts for data processing
-│   ├── Transfer_data.py   # Output organization utility
-│   └── validation_test/   # Validation and analysis scripts (Turbulent/Free_surface/Bridge)
-├── Pictures/              # Figures for documentation
-├── SPlisHSPlasH/         # Modified SPH source code
-├── venv/                 # Python virtual environment
-├── rebuild.bat           # Automated build script
-└── run_simulation.bat    # Simulation execution script
+├── python_scripts/
+│   ├── Tools_global/
+│   ├── Transfer_data.py
+│   └── validation_test/
+├── Pictures
+├── SPlisHSPlasH/
+├── venv/
+├── rebuild.bat
+└── run_simulation.bat
 ```
 
 ### Key components
