@@ -124,7 +124,7 @@ Utility script that automatically copies simulation outputs from the default loc
    python python_scripts/Transfer_data.py
    ```
 
-One reminds that the activate.bat script should always be used when creating terminal session.
+One reminds that the `activate.bat` script should always be used when creating terminal session.
 
 ### Modifying simulation parameters
 
